@@ -247,9 +247,13 @@ export async function getPhotoRange(): Promise<PhotoRangeResponse> {
   return apiGet<PhotoRangeResponse>("/photos/range");
 }
 
-export async function ensureThumbnails(photoIds: string[]): Promise<EnsureThumbnailsResponse> {
+export async function ensureThumbnails(
+  photoIds: string[],
+  options?: { force?: boolean },
+): Promise<EnsureThumbnailsResponse> {
   return apiPost<EnsureThumbnailsResponse>("/thumbnails/ensure", {
     photo_ids: photoIds,
+    force: options?.force ?? false,
   });
 }
 

@@ -11,8 +11,10 @@ from api.db.connection import THUMBNAILS_DIR, get_connection
 
 try:
     from PIL import Image
+    from PIL import ImageOps
 except ModuleNotFoundError as import_error:
     Image = None
+    ImageOps = None
     PIL_IMPORT_ERROR = import_error
 else:
     PIL_IMPORT_ERROR = None
@@ -172,7 +174,7 @@ def get_photo(photo_id: str) -> PhotoRecord:
     return PhotoRecord.from_row(row)
 
 
-def ensure_thumbnail(photo_id: str) -> dict[str, str | None]:
+def ensure_thumbnail(photo_id: str, force: bool = False) -> dict[str, str | None]:
     photo = get_photo(photo_id)
     source_path = Path(photo.file_path)
 
@@ -183,7 +185,7 @@ def ensure_thumbnail(photo_id: str) -> dict[str, str | None]:
     thumbnail_file = THUMBNAILS_DIR / thumbnail_filename
     thumbnail_url = f"/thumbnails/{thumbnail_filename}"
 
-    if photo.thumbnail_path == thumbnail_url and thumbnail_file.exists():
+    if not force and photo.thumbnail_path == thumbnail_url and thumbnail_file.exists():
         return {"id": photo.id, "thumbnail_path": thumbnail_url}
 
     if PIL_IMPORT_ERROR is not None:
@@ -199,6 +201,7 @@ def ensure_thumbnail(photo_id: str) -> dict[str, str | None]:
         )
 
     with Image.open(source_path) as image:
+        image = ImageOps.exif_transpose(image)
         image = image.convert("RGB")
         image.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
         image.save(thumbnail_file, format="JPEG", quality=85)
