@@ -58,6 +58,42 @@ If OCI firewall/security lists are configured to allow inbound TCP `8000`, the A
 http://<vm-public-ip>:8000
 ```
 
+## Database Migrations
+
+Alembic migrations live under:
+
+```text
+apps/api/migrations
+```
+
+For a managed MySQL database, set `DATABASE_URL` before running migrations:
+
+```bash
+export DATABASE_URL='mysql+pymysql://user:password@host:3306/photoviewer'
+```
+
+Run migrations from the repo root:
+
+```bash
+alembic upgrade head
+```
+
+Or run them inside the API container after rebuilding:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+The first migration creates:
+
+- `photos`
+- `ingestions`
+- `ingestion_errors`
+- `visits`
+- `photo_visits`
+
+SQLite support still exists for local/simple deployments. The current Docker Compose setup stores SQLite data under `./data`; MySQL migrations are for reproducible managed database schema setup.
+
 ## Common Commands
 
 Start or rebuild:

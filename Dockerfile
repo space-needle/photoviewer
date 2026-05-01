@@ -19,6 +19,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip
 
 COPY apps/api/pyproject.toml /app/apps/api/pyproject.toml
 COPY apps/api/src /app/apps/api/src
+COPY apps/api/migrations /app/apps/api/migrations
+COPY alembic.ini /app/alembic.ini
 COPY scripts /app/scripts
 COPY --from=web-build /app/apps/web/dist /app/static
 
