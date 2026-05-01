@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -8,12 +8,52 @@ class Base(DeclarativeBase):
     pass
 
 
-class Photo(Base):
-    __tablename__ = "photos"
+class User(Base):
+    __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class SourceAccount(Base):
+    __tablename__ = "source_accounts"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "account_label",
+            name="uq_source_accounts_user_provider_label",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class Photo(Base):
+    __tablename__ = "photos"
+    __table_args__ = (
+        Index(
+            "uq_photos_source_account_file_path",
+            "source_account_id",
+            "file_path",
+            unique=True,
+            mysql_length={"file_path": 732},
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    source_account_id: Mapped[str] = mapped_column(ForeignKey("source_accounts.id"), nullable=False)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(768), nullable=False, unique=True)
+    file_path: Mapped[str] = mapped_column(String(768), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     timestamp_original: Mapped[str | None] = mapped_column(String(64))
     timestamp_normalized: Mapped[str] = mapped_column(String(64), nullable=False)

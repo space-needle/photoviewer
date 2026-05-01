@@ -38,6 +38,7 @@ API_SRC = PROJECT_ROOT / "apps" / "api" / "src"
 if str(API_SRC) not in sys.path:
     sys.path.insert(0, str(API_SRC))
 
+from api.db.defaults import ensure_default_identity  # noqa: E402
 from api.db.models import Ingestion, IngestionError, Photo  # noqa: E402
 from api.db.session import IS_SQLITE, SessionLocal, initialize_storage  # noqa: E402
 
@@ -207,11 +208,18 @@ def create_ingestion_record(session: Session, root_path: Path) -> str:
     return ingestion_id
 
 
-def upsert_photo(session: Session, photo: PhotoMetadata) -> None:
+def upsert_photo(
+    session: Session,
+    photo: PhotoMetadata,
+    user_id: str,
+    source_account_id: str,
+) -> None:
     photo_id = str(uuid4())
     now = iso_now()
     values = {
         "id": photo_id,
+        "user_id": user_id,
+        "source_account_id": source_account_id,
         "source_type": "local",
         "file_path": photo.file_path,
         "file_name": photo.file_name,
@@ -242,7 +250,10 @@ def upsert_photo(session: Session, photo: PhotoMetadata) -> None:
     if IS_SQLITE:
         statement = sqlite_insert(Photo.__table__).values(**values)
         statement = statement.on_conflict_do_update(
-            index_elements=[Photo.__table__.c.file_path],
+            index_elements=[
+                Photo.__table__.c.source_account_id,
+                Photo.__table__.c.file_path,
+            ],
             set_=update_values,
         )
     else:
@@ -318,6 +329,8 @@ def run_ingestion(root_path: Path) -> tuple[str, int, int]:
     error_count = 0
 
     session = SessionLocal()
+    user_id, source_account_id = ensure_default_identity(session)
+    session.commit()
     ingestion_id = create_ingestion_record(session, root_path)
 
     try:
@@ -333,7 +346,7 @@ def run_ingestion(root_path: Path) -> tuple[str, int, int]:
 
                 try:
                     with session.begin_nested():
-                        upsert_photo(session, metadata)
+                        upsert_photo(session, metadata, user_id, source_account_id)
                     imported_count += 1
                 except Exception as error:  # noqa: BLE001
                     error_count += 1

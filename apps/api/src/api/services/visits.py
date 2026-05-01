@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy import text
 
+from api.db.defaults import DEFAULT_SOURCE_ACCOUNT_ID, DEFAULT_USER_ID
 from api.db.session import get_session
 from api.services.photos import PhotoRecord
 
@@ -61,8 +62,22 @@ def list_visits(
     limit: int,
     offset: int,
 ) -> dict[str, object]:
-    clauses: list[str] = []
-    params: dict[str, object] = {}
+    clauses: list[str] = [
+        """
+        EXISTS (
+          SELECT 1
+          FROM photo_visits
+          JOIN photos ON photos.id = photo_visits.photo_id
+          WHERE photo_visits.visit_id = visits.id
+            AND photos.user_id = :user_id
+            AND photos.source_account_id = :source_account_id
+        )
+        """,
+    ]
+    params: dict[str, object] = {
+        "user_id": DEFAULT_USER_ID,
+        "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+    }
 
     if start is not None:
         clauses.append("end_time >= :start")
@@ -101,8 +116,26 @@ def list_visits(
 def get_visit(visit_id: str) -> VisitRecord:
     with get_session() as session:
         row = session.execute(
-            text("SELECT * FROM visits WHERE id = :visit_id"),
-            {"visit_id": visit_id},
+            text(
+                """
+                SELECT *
+                FROM visits
+                WHERE id = :visit_id
+                  AND EXISTS (
+                    SELECT 1
+                    FROM photo_visits
+                    JOIN photos ON photos.id = photo_visits.photo_id
+                    WHERE photo_visits.visit_id = visits.id
+                      AND photos.user_id = :user_id
+                      AND photos.source_account_id = :source_account_id
+                  )
+                """
+            ),
+            {
+                "visit_id": visit_id,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+            },
         ).mappings().one_or_none()
 
     if row is None:
@@ -123,14 +156,9 @@ def update_visit_title(visit_id: str, title: str) -> dict[str, object | None]:
             detail=f"title must be {MAX_VISIT_TITLE_LENGTH} characters or fewer.",
         )
 
-    with get_session() as session:
-        existing = session.execute(
-            text("SELECT id FROM visits WHERE id = :visit_id"),
-            {"visit_id": visit_id},
-        ).one_or_none()
-        if existing is None:
-            raise HTTPException(status_code=404, detail="Visit not found.")
+    get_visit(visit_id)
 
+    with get_session() as session:
         session.execute(
             text(
                 """
@@ -155,8 +183,21 @@ def list_visit_photos(visit_id: str, limit: int, offset: int) -> dict[str, objec
 
     with get_session() as session:
         total = session.execute(
-            text("SELECT COUNT(*) FROM photo_visits WHERE visit_id = :visit_id"),
-            {"visit_id": visit_id},
+            text(
+                """
+                SELECT COUNT(*)
+                FROM photo_visits
+                JOIN photos ON photos.id = photo_visits.photo_id
+                WHERE photo_visits.visit_id = :visit_id
+                  AND photos.user_id = :user_id
+                  AND photos.source_account_id = :source_account_id
+                """
+            ),
+            {
+                "visit_id": visit_id,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+            },
         ).scalar_one()
         rows = session.execute(
             text(
@@ -165,11 +206,19 @@ def list_visit_photos(visit_id: str, limit: int, offset: int) -> dict[str, objec
             FROM photos
             JOIN photo_visits ON photo_visits.photo_id = photos.id
             WHERE photo_visits.visit_id = :visit_id
+              AND photos.user_id = :user_id
+              AND photos.source_account_id = :source_account_id
             ORDER BY photos.timestamp_normalized, photos.id
             LIMIT :limit OFFSET :offset
             """,
             ),
-            {"visit_id": visit_id, "limit": limit, "offset": offset},
+            {
+                "visit_id": visit_id,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+                "limit": limit,
+                "offset": offset,
+            },
         ).mappings().all()
 
     return {

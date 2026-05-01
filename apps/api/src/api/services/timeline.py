@@ -6,6 +6,7 @@ from typing import Literal
 
 from sqlalchemy import text
 
+from api.db.defaults import DEFAULT_SOURCE_ACCOUNT_ID, DEFAULT_USER_ID
 from api.db.session import get_session
 
 
@@ -110,10 +111,17 @@ def fetch_bucket_counts(start: datetime, end: datetime, zoom: ZoomLevel) -> dict
             FROM photos
             WHERE timestamp_normalized >= :start
               AND timestamp_normalized < :end
+              AND user_id = :user_id
+              AND source_account_id = :source_account_id
             ORDER BY timestamp_normalized
             """,
             ),
-            {"start": format_iso_timestamp(start), "end": format_iso_timestamp(end)},
+            {
+                "start": format_iso_timestamp(start),
+                "end": format_iso_timestamp(end),
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+            },
         ).mappings().all()
 
     counts: dict[datetime, int] = {}

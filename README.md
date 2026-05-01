@@ -92,13 +92,17 @@ docker compose up -d --build
 docker compose exec api python scripts/ingest_local_folder.py --root /photos
 ```
 
-The first migration creates:
+The migrations create:
 
+- `users`
+- `source_accounts`
 - `photos`
 - `ingestions`
 - `ingestion_errors`
 - `visits`
 - `photo_visits`
+
+For now the app creates/uses a default development user (`dev-user`) and default local source account (`dev-local-source`). Authentication is intentionally not implemented yet.
 
 SQLite support still exists for local/simple deployments. The current Docker Compose setup stores SQLite data under `./data`; MySQL migrations are for reproducible managed database schema setup.
 

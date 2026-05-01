@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
+from api.db.defaults import DEFAULT_SOURCE_ACCOUNT_ID, DEFAULT_USER_ID
 from api.db.session import get_session
 from api.services.timeline import parse_iso_timestamp
 
@@ -19,7 +20,12 @@ def get_map_points(
 ) -> dict[str, list[dict[str, object | None]]]:
     del bounds, cluster
 
-    clauses = ["latitude IS NOT NULL", "longitude IS NOT NULL"]
+    clauses = [
+        "latitude IS NOT NULL",
+        "longitude IS NOT NULL",
+        "user_id = :user_id",
+        "source_account_id = :source_account_id",
+    ]
 
     if start is not None:
         try:
@@ -43,7 +49,10 @@ def get_map_points(
         if parsed_start >= parsed_end:
             raise HTTPException(status_code=400, detail="start must be earlier than end.")
 
-    query_params = {}
+    query_params = {
+        "user_id": DEFAULT_USER_ID,
+        "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+    }
     if start is not None:
         query_params["start"] = start
     if end is not None:

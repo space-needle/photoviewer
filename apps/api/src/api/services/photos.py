@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 
 from api.db.connection import THUMBNAILS_DIR
+from api.db.defaults import DEFAULT_SOURCE_ACCOUNT_ID, DEFAULT_USER_ID
 from api.db.session import get_session
 
 try:
@@ -40,6 +41,8 @@ def iso_now() -> str:
 @dataclass(slots=True)
 class PhotoRecord:
     id: str
+    user_id: str
+    source_account_id: str
     file_path: str
     file_name: str
     thumbnail_path: str | None
@@ -59,6 +62,8 @@ class PhotoRecord:
     def from_row(cls, row: Any) -> "PhotoRecord":
         return cls(
             id=str(row["id"]),
+            user_id=str(row["user_id"]),
+            source_account_id=str(row["source_account_id"]),
             file_path=str(row["file_path"]),
             file_name=str(row["file_name"]),
             thumbnail_path=str(row["thumbnail_path"]) if row["thumbnail_path"] else None,
@@ -93,6 +98,8 @@ class PhotoRecord:
     def to_detail(self) -> dict[str, object | None]:
         return {
             "id": self.id,
+            "user_id": self.user_id,
+            "source_account_id": self.source_account_id,
             "source_type": self.source_type,
             "file_path": self.file_path,
             "file_name": self.file_name,
@@ -124,9 +131,16 @@ def list_photos_in_bucket(
             FROM photos
             WHERE timestamp_normalized >= :bucket_start
               AND timestamp_normalized < :bucket_end
+              AND user_id = :user_id
+              AND source_account_id = :source_account_id
             """,
             ),
-            {"bucket_start": bucket_start, "bucket_end": bucket_end},
+            {
+                "bucket_start": bucket_start,
+                "bucket_end": bucket_end,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+            },
         ).scalar_one()
 
         rows = session.execute(
@@ -136,6 +150,8 @@ def list_photos_in_bucket(
             FROM photos
             WHERE timestamp_normalized >= :bucket_start
               AND timestamp_normalized < :bucket_end
+              AND user_id = :user_id
+              AND source_account_id = :source_account_id
             ORDER BY timestamp_normalized, id
             LIMIT :limit OFFSET :offset
             """,
@@ -143,6 +159,8 @@ def list_photos_in_bucket(
             {
                 "bucket_start": bucket_start,
                 "bucket_end": bucket_end,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
                 "limit": limit,
                 "offset": offset,
             },
@@ -162,8 +180,14 @@ def get_photo_range() -> dict[str, object | None]:
               MAX(timestamp_normalized) AS end,
               COUNT(*) AS photo_count
             FROM photos
+            WHERE user_id = :user_id
+              AND source_account_id = :source_account_id
             """
-            )
+            ),
+            {
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+            },
         ).mappings().one()
 
     photo_count = int(row["photo_count"])
@@ -177,8 +201,20 @@ def get_photo_range() -> dict[str, object | None]:
 def get_photo(photo_id: str) -> PhotoRecord:
     with get_session() as session:
         row = session.execute(
-            text("SELECT * FROM photos WHERE id = :photo_id"),
-            {"photo_id": photo_id},
+            text(
+                """
+                SELECT *
+                FROM photos
+                WHERE id = :photo_id
+                  AND user_id = :user_id
+                  AND source_account_id = :source_account_id
+                """
+            ),
+            {
+                "photo_id": photo_id,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
+            },
         ).mappings().one_or_none()
 
     if row is None:
@@ -226,12 +262,16 @@ def ensure_thumbnail(photo_id: str, force: bool = False) -> dict[str, str | None
             UPDATE photos
             SET thumbnail_path = :thumbnail_path, updated_at = :updated_at
             WHERE id = :photo_id
+              AND user_id = :user_id
+              AND source_account_id = :source_account_id
             """,
             ),
             {
                 "thumbnail_path": thumbnail_url,
                 "updated_at": iso_now(),
                 "photo_id": photo.id,
+                "user_id": DEFAULT_USER_ID,
+                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
             },
         )
         session.commit()

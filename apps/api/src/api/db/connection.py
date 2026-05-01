@@ -11,13 +11,38 @@ DATABASE_PATH = DATA_DIR / "photoviewer.db"
 THUMBNAILS_DIR = Path(
     os.environ.get("PHOTOVIEWER_THUMBNAILS_DIR", DATA_DIR / "thumbnails"),
 )
+DEFAULT_USER_ID = "dev-user"
+DEFAULT_SOURCE_ACCOUNT_ID = "dev-local-source"
 
 SCHEMA_STATEMENTS = (
     """
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE,
+      display_name TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS source_accounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      account_label TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, provider, account_label),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS photos (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_account_id TEXT NOT NULL,
       source_type TEXT NOT NULL,
-      file_path TEXT NOT NULL UNIQUE,
+      file_path TEXT NOT NULL,
       file_name TEXT NOT NULL,
       timestamp_original TEXT,
       timestamp_normalized TEXT NOT NULL,
@@ -29,9 +54,14 @@ SCHEMA_STATEMENTS = (
       thumbnail_path TEXT,
       fingerprint TEXT,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      UNIQUE(source_account_id, file_path),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (source_account_id) REFERENCES source_accounts(id)
     );
     """,
+    "CREATE INDEX IF NOT EXISTS idx_photos_user_timestamp ON photos(user_id, timestamp_normalized);",
+    "CREATE INDEX IF NOT EXISTS idx_photos_source_account_timestamp ON photos(source_account_id, timestamp_normalized);",
     "CREATE INDEX IF NOT EXISTS idx_photos_timestamp ON photos(timestamp_normalized);",
     "CREATE INDEX IF NOT EXISTS idx_photos_lat_lon ON photos(latitude, longitude);",
     "CREATE INDEX IF NOT EXISTS idx_photos_fingerprint ON photos(fingerprint);",
@@ -87,6 +117,12 @@ SCHEMA_STATEMENTS = (
 )
 
 
+def iso_now() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def get_connection() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
@@ -105,3 +141,58 @@ def initialize_database() -> None:
     with get_connection() as connection:
         for statement in SCHEMA_STATEMENTS:
             connection.execute(statement)
+        ensure_sqlite_identity(connection)
+        ensure_sqlite_photo_owner_columns(connection)
+
+
+def ensure_sqlite_identity(connection: sqlite3.Connection) -> None:
+    now = iso_now()
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO users (id, email, display_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (DEFAULT_USER_ID, "dev@local", "Development User", now, now),
+    )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO source_accounts (
+          id,
+          user_id,
+          provider,
+          account_label,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            DEFAULT_SOURCE_ACCOUNT_ID,
+            DEFAULT_USER_ID,
+            "local",
+            "Local Photos",
+            now,
+            now,
+        ),
+    )
+
+
+def ensure_sqlite_photo_owner_columns(connection: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(photos)").fetchall()
+    }
+    if "user_id" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN user_id TEXT")
+        connection.execute("UPDATE photos SET user_id = ?", (DEFAULT_USER_ID,))
+    if "source_account_id" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN source_account_id TEXT")
+        connection.execute(
+            "UPDATE photos SET source_account_id = ?",
+            (DEFAULT_SOURCE_ACCOUNT_ID,),
+        )
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_photos_source_account_file_path
+        ON photos(source_account_id, file_path)
+        """,
+    )
