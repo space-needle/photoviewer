@@ -1,0 +1,4 @@
+fastapi<1.0,>=0.115
+pillow<12.0,>=10.4
+pillow-heif<1.0,>=0.18
+uvicorn[standard]<1.0,>=0.30

@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: photoviewer-api
+Version: 0.1.0
+Summary: FastAPI backend for the Photoviewer MVP
+Requires-Python: >=3.11
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: pillow<12.0,>=10.4
+Requires-Dist: pillow-heif<1.0,>=0.18
+Requires-Dist: uvicorn[standard]<1.0,>=0.30
