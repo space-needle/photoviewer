@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import sqlite3
+import os
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.environ.get("PHOTOVIEWER_DATA_DIR", PROJECT_ROOT / "data"))
 DATABASE_PATH = DATA_DIR / "photoviewer.db"
-THUMBNAILS_DIR = DATA_DIR / "thumbnails"
+THUMBNAILS_DIR = Path(
+    os.environ.get("PHOTOVIEWER_THUMBNAILS_DIR", DATA_DIR / "thumbnails"),
+)
 
 SCHEMA_STATEMENTS = (
     """

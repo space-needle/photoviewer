@@ -59,8 +59,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Scan a local folder for JPEG/HEIC files and ingest EXIF metadata into SQLite.",
     )
-    parser.add_argument("folder", type=Path, help="Root folder to scan recursively.")
-    return parser.parse_args()
+    parser.add_argument("folder", type=Path, nargs="?", help="Root folder to scan recursively.")
+    parser.add_argument("--root", type=Path, help="Root folder to scan recursively.")
+    args = parser.parse_args()
+
+    if args.root is not None:
+        args.folder = args.root
+
+    if args.folder is None:
+        parser.error("folder or --root is required")
+
+    return args
 
 
 def iso_now() -> str:

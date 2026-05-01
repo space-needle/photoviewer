@@ -5,10 +5,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      PHOTOVIEWER_DATA_DIR: /data
+      PHOTOVIEWER_THUMBNAILS_DIR: /thumbnails
     volumes:
-      - ./data:/app/data
       - ./data:/data
       - ./photos:/photos
-      - ./thumbnails:/app/data/thumbnails
       - ./thumbnails:/thumbnails
     restart: unless-stopped
