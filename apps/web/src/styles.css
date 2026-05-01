@@ -858,15 +858,12 @@ input {
 }
 
 .thumbnailButton {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: block;
   width: 100%;
-  padding: 10px;
+  padding: 6px;
   border: 1px solid rgba(86, 106, 126, 0.12);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
-  text-align: left;
 }
 
 .thumbnailImage {
@@ -876,25 +873,6 @@ input {
   object-fit: cover;
   border-radius: 14px;
   background: rgba(190, 205, 219, 0.24);
-}
-
-.thumbnailMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.thumbnailName {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #18304a;
-  word-break: break-word;
-}
-
-.thumbnailTimestamp {
-  font-size: 0.76rem;
-  color: #607489;
-  word-break: break-word;
 }
 
 .modalBackdrop {

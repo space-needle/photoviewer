@@ -170,10 +170,6 @@ export function VisitsPanel(props: VisitsPanelProps) {
                     alt={photo.file_name}
                     loading="lazy"
                   />
-                  <span className="thumbnailMeta">
-                    <span className="thumbnailName">{photo.file_name}</span>
-                    <span className="thumbnailTimestamp">{photo.timestamp_normalized}</span>
-                  </span>
                 </button>
               ))}
             </div>
