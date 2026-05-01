@@ -1,0 +1,14 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./data:/data
+      - ./photos:/photos
+      - ./thumbnails:/app/data/thumbnails
+      - ./thumbnails:/thumbnails
+    restart: unless-stopped

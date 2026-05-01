@@ -1,0 +1,10 @@
+.git
+.venv
+apps/api/.venv
+apps/web/node_modules
+apps/web/dist
+data
+photos
+thumbnails
+__pycache__
+*.pyc
