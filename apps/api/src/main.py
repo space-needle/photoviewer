@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.db.connection import THUMBNAILS_DIR, initialize_database
+from api.db.connection import THUMBNAILS_DIR
+from api.db.session import initialize_storage
 from api.routes.health import router as health_router
 from api.routes.map import router as map_router
 from api.routes.photos import router as photos_router
@@ -22,7 +23,7 @@ INDEX_HTML = STATIC_DIR / "index.html"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    initialize_database()
+    initialize_storage()
     yield
 
 

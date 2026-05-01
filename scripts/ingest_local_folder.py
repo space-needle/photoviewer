@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
+
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.orm import Session
 
 try:
     from PIL import Image
@@ -35,7 +38,8 @@ API_SRC = PROJECT_ROOT / "apps" / "api" / "src"
 if str(API_SRC) not in sys.path:
     sys.path.insert(0, str(API_SRC))
 
-from api.db.connection import get_connection, initialize_database  # noqa: E402
+from api.db.models import Ingestion, IngestionError, Photo  # noqa: E402
+from api.db.session import IS_SQLITE, SessionLocal, initialize_storage  # noqa: E402
 
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".heic"}
@@ -57,7 +61,7 @@ class PhotoMetadata:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Scan a local folder for JPEG/HEIC files and ingest EXIF metadata into SQLite.",
+        description="Scan a local folder for JPEG/HEIC files and ingest EXIF metadata.",
     )
     parser.add_argument("folder", type=Path, nargs="?", help="Root folder to scan recursively.")
     parser.add_argument("--root", type=Path, help="Root folder to scan recursively.")
@@ -183,106 +187,91 @@ def extract_metadata(path: Path) -> PhotoMetadata:
         )
 
 
-def create_ingestion_record(connection: sqlite3.Connection, root_path: Path) -> str:
+def create_ingestion_record(session: Session, root_path: Path) -> str:
     ingestion_id = str(uuid4())
-    connection.execute(
-        """
-        INSERT INTO ingestions (
-          id,
-          root_path,
-          started_at,
-          status,
-          scanned_count,
-          imported_count,
-          skipped_count,
-          error_count
-        ) VALUES (?, ?, ?, ?, 0, 0, 0, 0)
-        """,
-        (ingestion_id, str(root_path.resolve()), iso_now(), "running"),
+    session.add(
+        Ingestion(
+            id=ingestion_id,
+            root_path=str(root_path.resolve()),
+            started_at=iso_now(),
+            finished_at=None,
+            status="running",
+            scanned_count=0,
+            imported_count=0,
+            skipped_count=0,
+            error_count=0,
+            notes=None,
+        ),
     )
+    session.commit()
     return ingestion_id
 
 
-def upsert_photo(connection: sqlite3.Connection, photo: PhotoMetadata) -> None:
+def upsert_photo(session: Session, photo: PhotoMetadata) -> None:
     photo_id = str(uuid4())
     now = iso_now()
-    connection.execute(
-        """
-        INSERT INTO photos (
-          id,
-          source_type,
-          file_path,
-          file_name,
-          timestamp_original,
-          timestamp_normalized,
-          timezone_offset,
-          latitude,
-          longitude,
-          width,
-          height,
-          thumbnail_path,
-          fingerprint,
-          created_at,
-          updated_at
-        ) VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-        ON CONFLICT(file_path) DO UPDATE SET
-          file_name = excluded.file_name,
-          timestamp_original = excluded.timestamp_original,
-          timestamp_normalized = excluded.timestamp_normalized,
-          timezone_offset = excluded.timezone_offset,
-          latitude = excluded.latitude,
-          longitude = excluded.longitude,
-          width = excluded.width,
-          height = excluded.height,
-          updated_at = excluded.updated_at
-        """,
-        (
-            photo_id,
-            photo.file_path,
-            photo.file_name,
-            photo.timestamp_original,
-            photo.timestamp_normalized,
-            photo.timezone_offset,
-            photo.latitude,
-            photo.longitude,
-            photo.width,
-            photo.height,
-            now,
-            now,
-        ),
-    )
+    values = {
+        "id": photo_id,
+        "source_type": "local",
+        "file_path": photo.file_path,
+        "file_name": photo.file_name,
+        "timestamp_original": photo.timestamp_original,
+        "timestamp_normalized": photo.timestamp_normalized,
+        "timezone_offset": photo.timezone_offset,
+        "latitude": photo.latitude,
+        "longitude": photo.longitude,
+        "width": photo.width,
+        "height": photo.height,
+        "thumbnail_path": None,
+        "fingerprint": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    update_values = {
+        "file_name": photo.file_name,
+        "timestamp_original": photo.timestamp_original,
+        "timestamp_normalized": photo.timestamp_normalized,
+        "timezone_offset": photo.timezone_offset,
+        "latitude": photo.latitude,
+        "longitude": photo.longitude,
+        "width": photo.width,
+        "height": photo.height,
+        "updated_at": now,
+    }
+
+    if IS_SQLITE:
+        statement = sqlite_insert(Photo.__table__).values(**values)
+        statement = statement.on_conflict_do_update(
+            index_elements=[Photo.__table__.c.file_path],
+            set_=update_values,
+        )
+    else:
+        statement = mysql_insert(Photo.__table__).values(**values)
+        statement = statement.on_duplicate_key_update(**update_values)
+
+    session.execute(statement)
 
 
 def log_ingestion_error(
-    connection: sqlite3.Connection,
+    session: Session,
     ingestion_id: str,
     file_path: Path,
     error: Exception,
 ) -> None:
-    connection.execute(
-        """
-        INSERT INTO ingestion_errors (
-          id,
-          ingestion_id,
-          file_path,
-          error_code,
-          error_message,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            str(uuid4()),
-            ingestion_id,
-            str(file_path.resolve()),
-            error.__class__.__name__,
-            str(error),
-            iso_now(),
+    session.add(
+        IngestionError(
+            id=str(uuid4()),
+            ingestion_id=ingestion_id,
+            file_path=str(file_path.resolve()),
+            error_code=error.__class__.__name__,
+            error_message=str(error),
+            created_at=iso_now(),
         ),
     )
 
 
 def finalize_ingestion(
-    connection: sqlite3.Connection,
+    session: Session,
     ingestion_id: str,
     scanned_count: int,
     imported_count: int,
@@ -302,29 +291,17 @@ def finalize_ingestion(
         status = "completed"
         notes = None
 
-    connection.execute(
-        """
-        UPDATE ingestions
-        SET finished_at = ?,
-            status = ?,
-            scanned_count = ?,
-            imported_count = ?,
-            skipped_count = ?,
-            error_count = ?,
-            notes = ?
-        WHERE id = ?
-        """,
-        (
-            iso_now(),
-            status,
-            scanned_count,
-            imported_count,
-            skipped_count,
-            error_count,
-            notes,
-            ingestion_id,
-        ),
-    )
+    ingestion = session.get(Ingestion, ingestion_id)
+    if ingestion is None:
+        raise RuntimeError(f"Ingestion record not found: {ingestion_id}")
+
+    ingestion.finished_at = iso_now()
+    ingestion.status = status
+    ingestion.scanned_count = scanned_count
+    ingestion.imported_count = imported_count
+    ingestion.skipped_count = skipped_count
+    ingestion.error_count = error_count
+    ingestion.notes = notes
 
 
 def run_ingestion(root_path: Path) -> tuple[str, int, int]:
@@ -333,45 +310,61 @@ def run_ingestion(root_path: Path) -> tuple[str, int, int]:
             "Pillow is required for local ingestion. Run `pip install -e apps/api` first.",
         ) from PIL_IMPORT_ERROR
 
-    initialize_database()
+    initialize_storage()
 
     scanned_count = 0
     imported_count = 0
     skipped_count = 0
     error_count = 0
 
-    with get_connection() as connection:
-        ingestion_id = create_ingestion_record(connection, root_path)
+    session = SessionLocal()
+    ingestion_id = create_ingestion_record(session, root_path)
 
+    try:
         try:
             for path in iter_image_paths(root_path):
                 scanned_count += 1
                 try:
                     metadata = extract_metadata(path)
-                    upsert_photo(connection, metadata)
+                except Exception as error:  # noqa: BLE001
+                    error_count += 1
+                    log_ingestion_error(session, ingestion_id, path, error)
+                    continue
+
+                try:
+                    with session.begin_nested():
+                        upsert_photo(session, metadata)
                     imported_count += 1
                 except Exception as error:  # noqa: BLE001
                     error_count += 1
-                    log_ingestion_error(connection, ingestion_id, path, error)
+                    log_ingestion_error(session, ingestion_id, path, error)
+
+                if scanned_count % 100 == 0:
+                    session.commit()
 
             finalize_ingestion(
-                connection,
+                session,
                 ingestion_id,
                 scanned_count,
                 imported_count,
                 skipped_count,
                 error_count,
             )
+            session.commit()
         except Exception:  # noqa: BLE001
+            session.rollback()
             finalize_ingestion(
-                connection,
+                session,
                 ingestion_id,
                 scanned_count,
                 imported_count,
                 skipped_count,
                 error_count + 1,
             )
+            session.commit()
             raise
+    finally:
+        session.close()
 
     return ingestion_id, imported_count, error_count
 

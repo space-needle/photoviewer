@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from api.db.connection import get_connection
+from sqlalchemy import text
+
+from api.db.session import get_session
 
 
 ZoomLevel = Literal["overview", "mid", "detail"]
@@ -100,17 +102,19 @@ def fetch_bucket_counts(start: datetime, end: datetime, zoom: ZoomLevel) -> dict
     bucket_delta = ZOOM_CONFIG[zoom]["bucket_delta"]
     assert isinstance(bucket_delta, timedelta)
 
-    with get_connection() as connection:
-        rows = connection.execute(
-            """
+    with get_session() as session:
+        rows = session.execute(
+            text(
+                """
             SELECT timestamp_normalized
             FROM photos
-            WHERE datetime(timestamp_normalized) >= datetime(?)
-              AND datetime(timestamp_normalized) < datetime(?)
-            ORDER BY datetime(timestamp_normalized)
+            WHERE timestamp_normalized >= :start
+              AND timestamp_normalized < :end
+            ORDER BY timestamp_normalized
             """,
-            (format_iso_timestamp(start), format_iso_timestamp(end)),
-        ).fetchall()
+            ),
+            {"start": format_iso_timestamp(start), "end": format_iso_timestamp(end)},
+        ).mappings().all()
 
     counts: dict[datetime, int] = {}
     for row in rows:

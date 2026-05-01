@@ -98,6 +98,10 @@ def get_connection() -> sqlite3.Connection:
 
 
 def initialize_database() -> None:
+    if os.environ.get("DATABASE_URL"):
+        THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
+        return
+
     with get_connection() as connection:
         for statement in SCHEMA_STATEMENTS:
             connection.execute(statement)

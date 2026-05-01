@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import text
 
-from api.db.connection import get_connection
+from api.db.session import get_session
 from api.services.timeline import parse_iso_timestamp
 
 
@@ -19,7 +20,6 @@ def get_map_points(
     del bounds, cluster
 
     clauses = ["latitude IS NOT NULL", "longitude IS NOT NULL"]
-    params: list[str] = []
 
     if start is not None:
         try:
@@ -27,8 +27,7 @@ def get_map_points(
         except ValueError as error:
             raise HTTPException(status_code=400, detail=f"Invalid start timestamp: {error}") from error
 
-        clauses.append("datetime(timestamp_normalized) >= datetime(?)")
-        params.append(start)
+        clauses.append("timestamp_normalized >= :start")
 
     if end is not None:
         try:
@@ -36,8 +35,7 @@ def get_map_points(
         except ValueError as error:
             raise HTTPException(status_code=400, detail=f"Invalid end timestamp: {error}") from error
 
-        clauses.append("datetime(timestamp_normalized) < datetime(?)")
-        params.append(end)
+        clauses.append("timestamp_normalized < :end")
 
     if start is not None and end is not None:
         parsed_start = parse_iso_timestamp(start)
@@ -45,9 +43,16 @@ def get_map_points(
         if parsed_start >= parsed_end:
             raise HTTPException(status_code=400, detail="start must be earlier than end.")
 
-    with get_connection() as connection:
-        rows = connection.execute(
-            f"""
+    query_params = {}
+    if start is not None:
+        query_params["start"] = start
+    if end is not None:
+        query_params["end"] = end
+
+    with get_session() as session:
+        rows = session.execute(
+            text(
+                f"""
             SELECT
               id,
               latitude,
@@ -57,10 +62,11 @@ def get_map_points(
               file_name
             FROM photos
             WHERE {" AND ".join(clauses)}
-            ORDER BY datetime(timestamp_normalized), id
+            ORDER BY timestamp_normalized, id
             """,
-            params,
-        ).fetchall()
+            ),
+            query_params,
+        ).mappings().all()
 
     return {
         "items": [

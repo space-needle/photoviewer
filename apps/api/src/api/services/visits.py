@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import text
 
-from api.db.connection import get_connection
+from api.db.session import get_session
 from api.services.photos import PhotoRecord
 
 
@@ -61,33 +62,35 @@ def list_visits(
     offset: int,
 ) -> dict[str, object]:
     clauses: list[str] = []
-    params: list[object] = []
+    params: dict[str, object] = {}
 
     if start is not None:
-        clauses.append("datetime(end_time) >= datetime(?)")
-        params.append(start)
+        clauses.append("end_time >= :start")
+        params["start"] = start
 
     if end is not None:
-        clauses.append("datetime(start_time) < datetime(?)")
-        params.append(end)
+        clauses.append("start_time < :end")
+        params["end"] = end
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
-    with get_connection() as connection:
-        total = connection.execute(
-            f"SELECT COUNT(*) FROM visits {where}",
+    with get_session() as session:
+        total = session.execute(
+            text(f"SELECT COUNT(*) FROM visits {where}"),
             params,
-        ).fetchone()[0]
-        rows = connection.execute(
-            f"""
+        ).scalar_one()
+        rows = session.execute(
+            text(
+                f"""
             SELECT *
             FROM visits
             {where}
-            ORDER BY datetime(start_time), id
-            LIMIT ? OFFSET ?
+            ORDER BY start_time, id
+            LIMIT :limit OFFSET :offset
             """,
-            [*params, limit, offset],
-        ).fetchall()
+            ),
+            {**params, "limit": limit, "offset": offset},
+        ).mappings().all()
 
     return {
         "total": int(total),
@@ -96,11 +99,11 @@ def list_visits(
 
 
 def get_visit(visit_id: str) -> VisitRecord:
-    with get_connection() as connection:
-        row = connection.execute(
-            "SELECT * FROM visits WHERE id = ?",
-            (visit_id,),
-        ).fetchone()
+    with get_session() as session:
+        row = session.execute(
+            text("SELECT * FROM visits WHERE id = :visit_id"),
+            {"visit_id": visit_id},
+        ).mappings().one_or_none()
 
     if row is None:
         raise HTTPException(status_code=404, detail="Visit not found.")
@@ -120,19 +123,29 @@ def update_visit_title(visit_id: str, title: str) -> dict[str, object | None]:
             detail=f"title must be {MAX_VISIT_TITLE_LENGTH} characters or fewer.",
         )
 
-    with get_connection() as connection:
-        row = connection.execute(
-            """
-            UPDATE visits
-            SET title = ?, updated_at = ?
-            WHERE id = ?
-            RETURNING *
-            """,
-            (normalized_title, iso_now(), visit_id),
-        ).fetchone()
+    with get_session() as session:
+        existing = session.execute(
+            text("SELECT id FROM visits WHERE id = :visit_id"),
+            {"visit_id": visit_id},
+        ).one_or_none()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Visit not found.")
 
-    if row is None:
-        raise HTTPException(status_code=404, detail="Visit not found.")
+        session.execute(
+            text(
+                """
+            UPDATE visits
+            SET title = :title, updated_at = :updated_at
+            WHERE id = :visit_id
+            """,
+            ),
+            {"title": normalized_title, "updated_at": iso_now(), "visit_id": visit_id},
+        )
+        row = session.execute(
+            text("SELECT * FROM visits WHERE id = :visit_id"),
+            {"visit_id": visit_id},
+        ).mappings().one()
+        session.commit()
 
     return VisitRecord.from_row(row).to_item()
 
@@ -140,22 +153,24 @@ def update_visit_title(visit_id: str, title: str) -> dict[str, object | None]:
 def list_visit_photos(visit_id: str, limit: int, offset: int) -> dict[str, object]:
     get_visit(visit_id)
 
-    with get_connection() as connection:
-        total = connection.execute(
-            "SELECT COUNT(*) FROM photo_visits WHERE visit_id = ?",
-            (visit_id,),
-        ).fetchone()[0]
-        rows = connection.execute(
-            """
+    with get_session() as session:
+        total = session.execute(
+            text("SELECT COUNT(*) FROM photo_visits WHERE visit_id = :visit_id"),
+            {"visit_id": visit_id},
+        ).scalar_one()
+        rows = session.execute(
+            text(
+                """
             SELECT photos.*
             FROM photos
             JOIN photo_visits ON photo_visits.photo_id = photos.id
-            WHERE photo_visits.visit_id = ?
-            ORDER BY datetime(photos.timestamp_normalized), photos.id
-            LIMIT ? OFFSET ?
+            WHERE photo_visits.visit_id = :visit_id
+            ORDER BY photos.timestamp_normalized, photos.id
+            LIMIT :limit OFFSET :offset
             """,
-            (visit_id, limit, offset),
-        ).fetchall()
+            ),
+            {"visit_id": visit_id, "limit": limit, "offset": offset},
+        ).mappings().all()
 
     return {
         "total": int(total),

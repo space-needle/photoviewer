@@ -3,7 +3,10 @@ Name: photoviewer-api
 Version: 0.1.0
 Summary: FastAPI backend for the Photoviewer MVP
 Requires-Python: >=3.11
+Requires-Dist: alembic<2.0,>=1.13
 Requires-Dist: fastapi<1.0,>=0.115
 Requires-Dist: pillow<12.0,>=10.4
 Requires-Dist: pillow-heif<1.0,>=0.18
+Requires-Dist: pymysql<2.0,>=1.1
+Requires-Dist: sqlalchemy<3.0,>=2.0
 Requires-Dist: uvicorn[standard]<1.0,>=0.30

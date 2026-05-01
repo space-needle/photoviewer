@@ -84,6 +84,14 @@ Or run them inside the API container after rebuilding:
 docker compose exec api alembic upgrade head
 ```
 
+Ingestion uses the same `DATABASE_URL`, so export it before starting Compose:
+
+```bash
+export DATABASE_URL='mysql+pymysql://user:password@host:3306/photoviewer'
+docker compose up -d --build
+docker compose exec api python scripts/ingest_local_folder.py --root /photos
+```
+
 The first migration creates:
 
 - `photos`

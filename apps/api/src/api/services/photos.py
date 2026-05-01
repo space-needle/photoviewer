@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import text
 
-from api.db.connection import THUMBNAILS_DIR, get_connection
+from api.db.connection import THUMBNAILS_DIR
+from api.db.session import get_session
 
 try:
     from PIL import Image
@@ -114,44 +116,55 @@ def list_photos_in_bucket(
     limit: int,
     offset: int,
 ) -> dict[str, object]:
-    with get_connection() as connection:
-        total = connection.execute(
-            """
+    with get_session() as session:
+        total = session.execute(
+            text(
+                """
             SELECT COUNT(*)
             FROM photos
-            WHERE datetime(timestamp_normalized) >= datetime(?)
-              AND datetime(timestamp_normalized) < datetime(?)
+            WHERE timestamp_normalized >= :bucket_start
+              AND timestamp_normalized < :bucket_end
             """,
-            (bucket_start, bucket_end),
-        ).fetchone()[0]
+            ),
+            {"bucket_start": bucket_start, "bucket_end": bucket_end},
+        ).scalar_one()
 
-        rows = connection.execute(
-            """
+        rows = session.execute(
+            text(
+                """
             SELECT *
             FROM photos
-            WHERE datetime(timestamp_normalized) >= datetime(?)
-              AND datetime(timestamp_normalized) < datetime(?)
-            ORDER BY datetime(timestamp_normalized), id
-            LIMIT ? OFFSET ?
+            WHERE timestamp_normalized >= :bucket_start
+              AND timestamp_normalized < :bucket_end
+            ORDER BY timestamp_normalized, id
+            LIMIT :limit OFFSET :offset
             """,
-            (bucket_start, bucket_end, limit, offset),
-        ).fetchall()
+            ),
+            {
+                "bucket_start": bucket_start,
+                "bucket_end": bucket_end,
+                "limit": limit,
+                "offset": offset,
+            },
+        ).mappings().all()
 
     items = [PhotoRecord.from_row(row).to_list_item() for row in rows]
     return {"total": int(total), "items": items}
 
 
 def get_photo_range() -> dict[str, object | None]:
-    with get_connection() as connection:
-        row = connection.execute(
-            """
+    with get_session() as session:
+        row = session.execute(
+            text(
+                """
             SELECT
               MIN(timestamp_normalized) AS start,
               MAX(timestamp_normalized) AS end,
               COUNT(*) AS photo_count
             FROM photos
             """
-        ).fetchone()
+            )
+        ).mappings().one()
 
     photo_count = int(row["photo_count"])
     return {
@@ -162,11 +175,11 @@ def get_photo_range() -> dict[str, object | None]:
 
 
 def get_photo(photo_id: str) -> PhotoRecord:
-    with get_connection() as connection:
-        row = connection.execute(
-            "SELECT * FROM photos WHERE id = ?",
-            (photo_id,),
-        ).fetchone()
+    with get_session() as session:
+        row = session.execute(
+            text("SELECT * FROM photos WHERE id = :photo_id"),
+            {"photo_id": photo_id},
+        ).mappings().one_or_none()
 
     if row is None:
         raise HTTPException(status_code=404, detail="Photo not found.")
@@ -206,14 +219,21 @@ def ensure_thumbnail(photo_id: str, force: bool = False) -> dict[str, str | None
         image.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
         image.save(thumbnail_file, format="JPEG", quality=85)
 
-    with get_connection() as connection:
-        connection.execute(
-            """
+    with get_session() as session:
+        session.execute(
+            text(
+                """
             UPDATE photos
-            SET thumbnail_path = ?, updated_at = ?
-            WHERE id = ?
+            SET thumbnail_path = :thumbnail_path, updated_at = :updated_at
+            WHERE id = :photo_id
             """,
-            (thumbnail_url, iso_now(), photo.id),
+            ),
+            {
+                "thumbnail_path": thumbnail_url,
+                "updated_at": iso_now(),
+                "photo_id": photo.id,
+            },
         )
+        session.commit()
 
     return {"id": photo.id, "thumbnail_path": thumbnail_url}
