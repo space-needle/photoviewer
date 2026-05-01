@@ -1,3 +1,13 @@
+FROM node:20-slim AS web-build
+
+WORKDIR /app/apps/web
+
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci
+
+COPY apps/web ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -10,6 +20,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip
 COPY apps/api/pyproject.toml /app/apps/api/pyproject.toml
 COPY apps/api/src /app/apps/api/src
 COPY scripts /app/scripts
+COPY --from=web-build /app/apps/web/dist /app/static
 
 RUN python -m pip install --no-cache-dir -e /app/apps/api
 

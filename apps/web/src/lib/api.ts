@@ -1,4 +1,4 @@
-const defaultBaseUrl = "http://127.0.0.1:8000";
+const defaultBaseUrl = import.meta.env.DEV ? "http://127.0.0.1:8000" : "";
 
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
