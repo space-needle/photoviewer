@@ -42,8 +42,8 @@ class Photo(Base):
     __table_args__ = (
         UniqueConstraint(
             "source_account_id",
-            "file_path",
-            name="uq_photos_source_account_file_path",
+            "file_path_hash",
+            name="uq_photos_source_account_file_path_hash",
         ),
     )
 
@@ -52,6 +52,7 @@ class Photo(Base):
     source_account_id: Mapped[str] = mapped_column(ForeignKey("source_accounts.id"), nullable=False)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
     file_path: Mapped[str] = mapped_column(String(768), nullable=False)
+    file_path_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     timestamp_original: Mapped[str | None] = mapped_column(String(64))
     timestamp_normalized: Mapped[str] = mapped_column(String(64), nullable=False)

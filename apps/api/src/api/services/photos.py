@@ -44,6 +44,7 @@ class PhotoRecord:
     user_id: str
     source_account_id: str
     file_path: str
+    file_path_hash: str
     file_name: str
     thumbnail_path: str | None
     timestamp_normalized: str
@@ -65,6 +66,7 @@ class PhotoRecord:
             user_id=str(row["user_id"]),
             source_account_id=str(row["source_account_id"]),
             file_path=str(row["file_path"]),
+            file_path_hash=str(row["file_path_hash"]),
             file_name=str(row["file_name"]),
             thumbnail_path=str(row["thumbnail_path"]) if row["thumbnail_path"] else None,
             timestamp_normalized=str(row["timestamp_normalized"]),
@@ -102,6 +104,7 @@ class PhotoRecord:
             "source_account_id": self.source_account_id,
             "source_type": self.source_type,
             "file_path": self.file_path,
+            "file_path_hash": self.file_path_hash,
             "file_name": self.file_name,
             "timestamp_original": self.timestamp_original,
             "timestamp_normalized": self.timestamp_normalized,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -79,6 +80,10 @@ def parse_args() -> argparse.Namespace:
 
 def iso_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def hash_file_path(file_path: str) -> str:
+    return hashlib.sha256(file_path.encode("utf-8")).hexdigest()
 
 
 def iter_image_paths(root: Path) -> Iterable[Path]:
@@ -222,6 +227,7 @@ def upsert_photo(
         "source_account_id": source_account_id,
         "source_type": "local",
         "file_path": photo.file_path,
+        "file_path_hash": hash_file_path(photo.file_path),
         "file_name": photo.file_name,
         "timestamp_original": photo.timestamp_original,
         "timestamp_normalized": photo.timestamp_normalized,
@@ -252,7 +258,7 @@ def upsert_photo(
         statement = statement.on_conflict_do_update(
             index_elements=[
                 Photo.__table__.c.source_account_id,
-                Photo.__table__.c.file_path,
+                Photo.__table__.c.file_path_hash,
             ],
             set_=update_values,
         )

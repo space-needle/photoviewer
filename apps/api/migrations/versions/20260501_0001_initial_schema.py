@@ -23,6 +23,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("source_type", sa.String(length=32), nullable=False),
         sa.Column("file_path", sa.String(length=768), nullable=False),
+        sa.Column("file_path_hash", sa.String(length=64), nullable=True),
         sa.Column("file_name", sa.String(length=255), nullable=False),
         sa.Column("timestamp_original", sa.String(length=64), nullable=True),
         sa.Column("timestamp_normalized", sa.String(length=64), nullable=False),
@@ -35,7 +36,6 @@ def upgrade() -> None:
         sa.Column("fingerprint", sa.String(length=128), nullable=True),
         sa.Column("created_at", sa.String(length=64), nullable=False),
         sa.Column("updated_at", sa.String(length=64), nullable=False),
-        sa.UniqueConstraint("file_path", name="uq_photos_file_path"),
     )
     op.create_index("idx_photos_timestamp", "photos", ["timestamp_normalized"])
     op.create_index("idx_photos_lat_lon", "photos", ["latitude", "longitude"])

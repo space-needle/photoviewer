@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import os
+import hashlib
 from pathlib import Path
 
 
@@ -43,6 +44,7 @@ SCHEMA_STATEMENTS = (
       source_account_id TEXT NOT NULL,
       source_type TEXT NOT NULL,
       file_path TEXT NOT NULL,
+      file_path_hash TEXT NOT NULL,
       file_name TEXT NOT NULL,
       timestamp_original TEXT,
       timestamp_normalized TEXT NOT NULL,
@@ -55,7 +57,7 @@ SCHEMA_STATEMENTS = (
       fingerprint TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(source_account_id, file_path),
+      UNIQUE(source_account_id, file_path_hash),
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (source_account_id) REFERENCES source_accounts(id)
     );
@@ -190,9 +192,17 @@ def ensure_sqlite_photo_owner_columns(connection: sqlite3.Connection) -> None:
             "UPDATE photos SET source_account_id = ?",
             (DEFAULT_SOURCE_ACCOUNT_ID,),
         )
+    if "file_path_hash" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN file_path_hash TEXT")
+        rows = connection.execute("SELECT id, file_path FROM photos").fetchall()
+        for row in rows:
+            connection.execute(
+                "UPDATE photos SET file_path_hash = ? WHERE id = ?",
+                (hashlib.sha256(str(row["file_path"]).encode("utf-8")).hexdigest(), row["id"]),
+            )
     connection.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_photos_source_account_file_path
-        ON photos(source_account_id, file_path)
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_photos_source_account_file_path_hash
+        ON photos(source_account_id, file_path_hash)
         """,
     )
