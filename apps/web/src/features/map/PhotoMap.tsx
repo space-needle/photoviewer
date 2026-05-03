@@ -91,18 +91,18 @@ export function PhotoMap(props: PhotoMapProps) {
       const isHighlighted = isPointInBucket(point, selectedBucket);
       const marker = isHighlighted
         ? L.circleMarker(position, {
-            radius: 11,
+            radius: 7,
             color: "#fff7ed",
-            weight: 3,
+            weight: 2,
             fillColor: "#fb923c",
-            fillOpacity: 0.92,
+            fillOpacity: 0.78,
           }).bindPopup(popup)
         : L.circleMarker(position, {
-            radius: 5,
-            color: "rgba(255,255,255,0.82)",
+            radius: 4,
+            color: "rgba(255,255,255,0.66)",
             weight: 1,
             fillColor: "#38bdf8",
-            fillOpacity: 0.86,
+            fillOpacity: 0.7,
           }).bindPopup(popup);
 
       marker.on("popupopen", () => {
@@ -122,11 +122,11 @@ export function PhotoMap(props: PhotoMapProps) {
       bounds.extend(position);
       const isActive = activeVisit?.id === visit.id;
       const marker = L.circleMarker(position, {
-        radius: isActive ? 15 : 11,
+        radius: isActive ? 8 : 5,
         color: isActive ? "#fef9c3" : "rgba(255,255,255,0.7)",
-        weight: isActive ? 4 : 3,
+        weight: isActive ? 2 : 1,
         fillColor: isActive ? "#facc15" : "#22c55e",
-        fillOpacity: 0.88,
+        fillOpacity: isActive ? 0.78 : 0.7,
       }).bindPopup(buildVisitPopup(visit));
 
       marker.on("click", () => onSelectVisit(visit));
