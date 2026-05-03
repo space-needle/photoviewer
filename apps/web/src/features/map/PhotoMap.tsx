@@ -18,19 +18,6 @@ type PhotoMapProps = {
   onOpenPhoto: (photoId: string) => void;
 };
 
-const markerIcon = L.icon({
-  iconUrl: new URL("leaflet/dist/images/marker-icon.png", import.meta.url).toString(),
-  iconRetinaUrl: new URL(
-    "leaflet/dist/images/marker-icon-2x.png",
-    import.meta.url,
-  ).toString(),
-  shadowUrl: new URL("leaflet/dist/images/marker-shadow.png", import.meta.url).toString(),
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
 export function PhotoMap(props: PhotoMapProps) {
   const {
     points,
@@ -43,6 +30,7 @@ export function PhotoMap(props: PhotoMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const heatLayerRef = useRef<PhotoHeatLayer | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -53,32 +41,40 @@ export function PhotoMap(props: PhotoMapProps) {
       center: [20, 0],
       zoom: 2,
       scrollWheelZoom: true,
+      zoomControl: false,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(map);
 
+    const heatLayer = new PhotoHeatLayer([]);
+    heatLayer.addTo(map);
     const layer = L.layerGroup().addTo(map);
     mapRef.current = map;
     layerRef.current = layer;
+    heatLayerRef.current = heatLayer;
 
     return () => {
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
+      heatLayerRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
     const layer = layerRef.current;
+    const heatLayer = heatLayerRef.current;
     if (!map || !layer) {
       return;
     }
 
     layer.clearLayers();
+    heatLayer?.setPoints(points);
 
     if (points.length === 0) {
       map.setView([20, 0], 2);
@@ -95,13 +91,19 @@ export function PhotoMap(props: PhotoMapProps) {
       const isHighlighted = isPointInBucket(point, selectedBucket);
       const marker = isHighlighted
         ? L.circleMarker(position, {
-            radius: 10,
-            color: "#9a4f00",
+            radius: 11,
+            color: "#fff7ed",
             weight: 3,
-            fillColor: "#f59e0b",
+            fillColor: "#fb923c",
             fillOpacity: 0.92,
           }).bindPopup(popup)
-        : L.marker(position, { icon: markerIcon }).bindPopup(popup);
+        : L.circleMarker(position, {
+            radius: 5,
+            color: "rgba(255,255,255,0.82)",
+            weight: 1,
+            fillColor: "#38bdf8",
+            fillOpacity: 0.86,
+          }).bindPopup(popup);
 
       marker.on("popupopen", () => {
         const button = popup.querySelector<HTMLButtonElement>("button[data-photo-id]");
@@ -120,10 +122,10 @@ export function PhotoMap(props: PhotoMapProps) {
       bounds.extend(position);
       const isActive = activeVisit?.id === visit.id;
       const marker = L.circleMarker(position, {
-        radius: isActive ? 15 : 12,
-        color: isActive ? "#166534" : "#2f6f4e",
+        radius: isActive ? 15 : 11,
+        color: isActive ? "#fef9c3" : "rgba(255,255,255,0.7)",
         weight: isActive ? 4 : 3,
-        fillColor: isActive ? "#22c55e" : "#86efac",
+        fillColor: isActive ? "#facc15" : "#22c55e",
         fillOpacity: 0.88,
       }).bindPopup(buildVisitPopup(visit));
 
@@ -131,13 +133,141 @@ export function PhotoMap(props: PhotoMapProps) {
       marker.addTo(layer);
     });
 
-    map.fitBounds(bounds, {
-      maxZoom: 14,
-      padding: [28, 28],
-    });
+    map.fitBounds(bounds, { maxZoom: 14, padding: [28, 28] });
   }, [activeVisit, onOpenPhoto, onSelectVisit, points, selectedBucket, visits]);
 
-  return <div ref={containerRef} className="mapCanvas" aria-label="Photo map" />;
+  function handleRecenter() {
+    const map = mapRef.current;
+    if (!map || points.length === 0) {
+      return;
+    }
+
+    const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lon]));
+    map.fitBounds(bounds, { maxZoom: 14, padding: [28, 28] });
+  }
+
+  function handleLocate() {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    map.locate({ setView: true, maxZoom: 13 });
+  }
+
+  return (
+    <div className="mapStage">
+      <div ref={containerRef} className="mapCanvas" aria-label="Photo map" />
+      <div className="mapFloatingTop">
+        <button
+          type="button"
+          className="mapFloatButton"
+          aria-label="Recenter map"
+          onClick={handleRecenter}
+        >
+          &lt;
+        </button>
+        <button type="button" className="mapFloatButton" aria-label="Map options">
+          ...
+        </button>
+      </div>
+      <button
+        type="button"
+        className="mapFloatButton mapLocateButton"
+        aria-label="Locate me"
+        onClick={handleLocate}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+type HeatPoint = Pick<MapPoint, "lat" | "lon">;
+
+class PhotoHeatLayer extends L.Layer {
+  private points: HeatPoint[];
+  private canvas: HTMLCanvasElement | null = null;
+  private map: L.Map | null = null;
+
+  constructor(points: HeatPoint[]) {
+    super();
+    this.points = points;
+  }
+
+  onAdd(map: L.Map): this {
+    this.map = map;
+    this.canvas = L.DomUtil.create("canvas", "photoHeatLayer");
+    const pane = map.getPane("overlayPane");
+    pane?.appendChild(this.canvas);
+    map.on("move zoom resize", this.draw, this);
+    this.draw();
+    return this;
+  }
+
+  onRemove(map: L.Map): this {
+    map.off("move zoom resize", this.draw, this);
+    this.canvas?.remove();
+    this.canvas = null;
+    this.map = null;
+    return this;
+  }
+
+  setPoints(points: HeatPoint[]) {
+    this.points = points;
+    this.draw();
+  }
+
+  private draw() {
+    if (!this.map || !this.canvas) {
+      return;
+    }
+
+    const size = this.map.getSize();
+    const topLeft = this.map.containerPointToLayerPoint([0, 0]);
+    const pixelRatio = window.devicePixelRatio || 1;
+    this.canvas.width = size.x * pixelRatio;
+    this.canvas.height = size.y * pixelRatio;
+    this.canvas.style.width = `${size.x}px`;
+    this.canvas.style.height = `${size.y}px`;
+    L.DomUtil.setPosition(this.canvas, topLeft);
+
+    const context = this.canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, size.x, size.y);
+    context.globalCompositeOperation = "lighter";
+
+    const zoom = this.map.getZoom();
+    const radius = Math.max(22, Math.min(54, zoom * 3.8));
+
+    this.points.forEach((point) => {
+      const projected = this.map!.latLngToContainerPoint([point.lat, point.lon]);
+      const gradient = context.createRadialGradient(
+        projected.x,
+        projected.y,
+        0,
+        projected.x,
+        projected.y,
+        radius,
+      );
+      gradient.addColorStop(0, "rgba(255, 71, 87, 0.42)");
+      gradient.addColorStop(0.22, "rgba(251, 146, 60, 0.32)");
+      gradient.addColorStop(0.48, "rgba(250, 204, 21, 0.22)");
+      gradient.addColorStop(0.7, "rgba(34, 197, 94, 0.16)");
+      gradient.addColorStop(1, "rgba(99, 102, 241, 0)");
+
+      context.fillStyle = gradient;
+      context.beginPath();
+      context.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
+      context.fill();
+    });
+
+    context.globalCompositeOperation = "source-over";
+  }
 }
 
 function buildVisitPopup(visit: Visit): HTMLElement {

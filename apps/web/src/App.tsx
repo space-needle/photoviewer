@@ -469,18 +469,16 @@ function MapPage(props: {
   }, [visibleRange.end, visibleRange.start]);
 
   return (
-    <section className="panel">
-      <div className="panelHeader">
+    <section className="panel mapPanel">
+      <div className="panelHeader mapPanelHeader">
         <div>
-          <p className="sectionLabel">View</p>
+          <p className="sectionLabel">Heatmap</p>
           <h2>Map</h2>
         </div>
         <span className="statusPill">{points.length} visible</span>
       </div>
 
-      <p className="description">GPS-tagged photos from your local metadata store.</p>
-
-      <div className="rangeSummary">
+      <div className="rangeSummary mapRangeSummary">
         <span>Visible: {formatVisibleRangeLabel(visibleRange)}</span>
         {selectedBucket ? <strong>Selected bucket active</strong> : null}
       </div>
