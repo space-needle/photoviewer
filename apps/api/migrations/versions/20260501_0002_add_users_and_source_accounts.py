@@ -27,6 +27,7 @@ def iso_now() -> str:
 
 
 def upgrade() -> None:
+    # Create ownership tables before touching existing photo rows.
     op.create_table(
         "users",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -54,6 +55,7 @@ def upgrade() -> None:
         ),
     )
 
+    # Seed a stable default owner so existing single-user data remains usable.
     now = iso_now()
     op.bulk_insert(
         sa.table(
@@ -96,6 +98,10 @@ def upgrade() -> None:
         ],
     )
 
+    # Safe migration sequence for existing rows:
+    # 1. Add nullable columns.
+    # 2. Backfill all existing photos to the default development owner/source.
+    # 3. Only then make the columns NOT NULL and add foreign keys.
     op.add_column("photos", sa.Column("user_id", sa.String(length=36), nullable=True))
     op.add_column("photos", sa.Column("source_account_id", sa.String(length=36), nullable=True))
     op.execute(
@@ -118,6 +124,7 @@ def upgrade() -> None:
         ["source_account_id"],
         ["id"],
     )
+    # Replace global file path uniqueness with source-scoped uniqueness.
     op.drop_constraint("uq_photos_file_path", "photos", type_="unique")
     op.create_index("idx_photos_user_timestamp", "photos", ["user_id", "timestamp_normalized"])
     op.create_index(
@@ -125,17 +132,15 @@ def upgrade() -> None:
         "photos",
         ["source_account_id", "timestamp_normalized"],
     )
-    op.create_index(
+    op.create_unique_constraint(
         "uq_photos_source_account_file_path",
         "photos",
         ["source_account_id", "file_path"],
-        unique=True,
-        mysql_length={"file_path": 732},
     )
 
 
 def downgrade() -> None:
-    op.drop_index("uq_photos_source_account_file_path", table_name="photos")
+    op.drop_constraint("uq_photos_source_account_file_path", "photos", type_="unique")
     op.drop_index("idx_photos_source_account_timestamp", table_name="photos")
     op.drop_index("idx_photos_user_timestamp", table_name="photos")
     op.create_unique_constraint("uq_photos_file_path", "photos", ["file_path"])

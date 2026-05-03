@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -40,12 +40,10 @@ class SourceAccount(Base):
 class Photo(Base):
     __tablename__ = "photos"
     __table_args__ = (
-        Index(
-            "uq_photos_source_account_file_path",
+        UniqueConstraint(
             "source_account_id",
             "file_path",
-            unique=True,
-            mysql_length={"file_path": 732},
+            name="uq_photos_source_account_file_path",
         ),
     )
 
