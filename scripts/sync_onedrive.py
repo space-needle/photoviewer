@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import random
 import sys
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +33,10 @@ from api.db.session import IS_SQLITE, SessionLocal, engine, initialize_storage  
 
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".heic", ".png"}
+RETRYABLE_STATUS_CODES = {429, 503, 504}
+NON_RETRYABLE_STATUS_CODES = {400, 401, 403, 404}
+MAX_GRAPH_RETRIES = 5
+PAGE_PACING_SECONDS = 0.3
 
 
 @dataclass(slots=True)
@@ -136,14 +142,58 @@ def acquire_access_token() -> str:
     return str(result["access_token"])
 
 
-def graph_get(session: requests.Session, url: str) -> dict[str, Any]:
-    response = session.get(url, timeout=60)
-    if response.status_code >= 400:
-        raise RuntimeError(f"Graph request failed {response.status_code}: {response.text}")
-    data = response.json()
-    if not isinstance(data, dict):
-        raise RuntimeError(f"Unexpected Graph response: {data}")
-    return data
+def retry_delay_seconds(response: requests.Response | None, attempt: int) -> float:
+    if response is not None:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(0.0, float(retry_after))
+            except ValueError:
+                pass
+
+    base_delay = min(60.0, 2.0 ** attempt)
+    return base_delay + random.uniform(0.0, min(1.0, base_delay * 0.25))
+
+
+def graph_get(session: requests.Session, url: str, max_retries: int = MAX_GRAPH_RETRIES) -> dict[str, Any]:
+    last_error: str | None = None
+
+    for attempt in range(max_retries + 1):
+        response: requests.Response | None = None
+        try:
+            response = session.get(url, timeout=60)
+        except requests.RequestException as error:
+            last_error = str(error)
+            if attempt >= max_retries:
+                break
+
+            delay = retry_delay_seconds(None, attempt)
+            print(f"Graph network error; retrying in {delay:.1f} seconds: {error}")
+            time.sleep(delay)
+            continue
+
+        if response.status_code < 400:
+            data = response.json()
+            if not isinstance(data, dict):
+                raise RuntimeError(f"Unexpected Graph response: {data}")
+            return data
+
+        if response.status_code in NON_RETRYABLE_STATUS_CODES:
+            raise RuntimeError(f"Graph request failed {response.status_code}: {response.text}")
+
+        if response.status_code not in RETRYABLE_STATUS_CODES:
+            raise RuntimeError(f"Graph request failed {response.status_code}: {response.text}")
+
+        last_error = f"{response.status_code}: {response.text}"
+        if attempt >= max_retries:
+            break
+
+        delay = retry_delay_seconds(response, attempt)
+        log_prefix = "Rate limited" if response.status_code == 429 else "Graph transient error"
+        print(f"{log_prefix}; retrying in {delay:.1f} seconds")
+        time.sleep(delay)
+
+    raise RuntimeError(f"Graph request failed after {max_retries} retries: {last_error}")
 
 
 def is_image_item(item: dict[str, Any]) -> bool:
@@ -410,6 +460,8 @@ def sync() -> None:
             db.commit()
             next_url = payload.get("@odata.nextLink")
             delta_link = payload.get("@odata.deltaLink") or delta_link
+            if next_url:
+                time.sleep(PAGE_PACING_SECONDS)
 
         if delta_link:
             source_account.sync_cursor = delta_link
