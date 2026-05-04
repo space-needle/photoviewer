@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
-from api.db.defaults import DEFAULT_SOURCE_ACCOUNT_ID, DEFAULT_USER_ID
+from api.db.defaults import DEFAULT_USER_ID
 from api.db.session import get_session
 from api.services.timeline import parse_iso_timestamp
 
@@ -24,7 +24,7 @@ def get_map_points(
         "latitude IS NOT NULL",
         "longitude IS NOT NULL",
         "user_id = :user_id",
-        "source_account_id = :source_account_id",
+        "deleted_at IS NULL",
     ]
 
     if start is not None:
@@ -51,7 +51,6 @@ def get_map_points(
 
     query_params = {
         "user_id": DEFAULT_USER_ID,
-        "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
     }
     if start is not None:
         query_params["start"] = start

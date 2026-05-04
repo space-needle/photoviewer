@@ -32,7 +32,10 @@ class SourceAccount(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_user_id: Mapped[str | None] = mapped_column(String(255))
     account_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    sync_cursor: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
     updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -51,6 +54,9 @@ class Photo(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     source_account_id: Mapped[str] = mapped_column(ForeignKey("source_accounts.id"), nullable=False)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_photo_id: Mapped[str | None] = mapped_column(String(255))
+    provider_drive_id: Mapped[str | None] = mapped_column(String(255))
+    provider_web_url: Mapped[str | None] = mapped_column(String(768))
     file_path: Mapped[str] = mapped_column(String(768), nullable=False)
     file_path_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -63,6 +69,7 @@ class Photo(Base):
     height: Mapped[int | None] = mapped_column(Integer)
     thumbnail_path: Mapped[str | None] = mapped_column(String(768))
     fingerprint: Mapped[str | None] = mapped_column(String(128))
+    deleted_at: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
     updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
 

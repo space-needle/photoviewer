@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 
 from api.db.connection import THUMBNAILS_DIR
-from api.db.defaults import DEFAULT_SOURCE_ACCOUNT_ID, DEFAULT_USER_ID
+from api.db.defaults import DEFAULT_USER_ID
 from api.db.session import get_session
 
 try:
@@ -51,11 +51,15 @@ class PhotoRecord:
     latitude: float | None
     longitude: float | None
     source_type: str
+    provider_photo_id: str | None
+    provider_drive_id: str | None
+    provider_web_url: str | None
     timestamp_original: str | None
     timezone_offset: str | None
     width: int | None
     height: int | None
     fingerprint: str | None
+    deleted_at: str | None
     created_at: str
     updated_at: str
 
@@ -73,6 +77,15 @@ class PhotoRecord:
             latitude=float(row["latitude"]) if row["latitude"] is not None else None,
             longitude=float(row["longitude"]) if row["longitude"] is not None else None,
             source_type=str(row["source_type"]),
+            provider_photo_id=(
+                str(row["provider_photo_id"]) if row["provider_photo_id"] else None
+            ),
+            provider_drive_id=(
+                str(row["provider_drive_id"]) if row["provider_drive_id"] else None
+            ),
+            provider_web_url=(
+                str(row["provider_web_url"]) if row["provider_web_url"] else None
+            ),
             timestamp_original=(
                 str(row["timestamp_original"]) if row["timestamp_original"] else None
             ),
@@ -82,6 +95,7 @@ class PhotoRecord:
             width=int(row["width"]) if row["width"] is not None else None,
             height=int(row["height"]) if row["height"] is not None else None,
             fingerprint=str(row["fingerprint"]) if row["fingerprint"] else None,
+            deleted_at=str(row["deleted_at"]) if row["deleted_at"] else None,
             created_at=str(row["created_at"]),
             updated_at=str(row["updated_at"]),
         )
@@ -103,6 +117,9 @@ class PhotoRecord:
             "user_id": self.user_id,
             "source_account_id": self.source_account_id,
             "source_type": self.source_type,
+            "provider_photo_id": self.provider_photo_id,
+            "provider_drive_id": self.provider_drive_id,
+            "provider_web_url": self.provider_web_url,
             "file_path": self.file_path,
             "file_path_hash": self.file_path_hash,
             "file_name": self.file_name,
@@ -115,6 +132,7 @@ class PhotoRecord:
             "height": self.height,
             "thumbnail_path": self.thumbnail_path,
             "fingerprint": self.fingerprint,
+            "deleted_at": self.deleted_at,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -135,14 +153,13 @@ def list_photos_in_bucket(
             WHERE timestamp_normalized >= :bucket_start
               AND timestamp_normalized < :bucket_end
               AND user_id = :user_id
-              AND source_account_id = :source_account_id
+              AND deleted_at IS NULL
             """,
             ),
             {
                 "bucket_start": bucket_start,
                 "bucket_end": bucket_end,
                 "user_id": DEFAULT_USER_ID,
-                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
             },
         ).scalar_one()
 
@@ -154,7 +171,7 @@ def list_photos_in_bucket(
             WHERE timestamp_normalized >= :bucket_start
               AND timestamp_normalized < :bucket_end
               AND user_id = :user_id
-              AND source_account_id = :source_account_id
+              AND deleted_at IS NULL
             ORDER BY timestamp_normalized, id
             LIMIT :limit OFFSET :offset
             """,
@@ -163,7 +180,6 @@ def list_photos_in_bucket(
                 "bucket_start": bucket_start,
                 "bucket_end": bucket_end,
                 "user_id": DEFAULT_USER_ID,
-                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
                 "limit": limit,
                 "offset": offset,
             },
@@ -184,12 +200,11 @@ def get_photo_range() -> dict[str, object | None]:
               COUNT(*) AS photo_count
             FROM photos
             WHERE user_id = :user_id
-              AND source_account_id = :source_account_id
+              AND deleted_at IS NULL
             """
             ),
             {
                 "user_id": DEFAULT_USER_ID,
-                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
             },
         ).mappings().one()
 
@@ -210,13 +225,12 @@ def get_photo(photo_id: str) -> PhotoRecord:
                 FROM photos
                 WHERE id = :photo_id
                   AND user_id = :user_id
-                  AND source_account_id = :source_account_id
+                  AND deleted_at IS NULL
                 """
             ),
             {
                 "photo_id": photo_id,
                 "user_id": DEFAULT_USER_ID,
-                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
             },
         ).mappings().one_or_none()
 
@@ -266,7 +280,7 @@ def ensure_thumbnail(photo_id: str, force: bool = False) -> dict[str, str | None
             SET thumbnail_path = :thumbnail_path, updated_at = :updated_at
             WHERE id = :photo_id
               AND user_id = :user_id
-              AND source_account_id = :source_account_id
+              AND deleted_at IS NULL
             """,
             ),
             {
@@ -274,7 +288,6 @@ def ensure_thumbnail(photo_id: str, force: bool = False) -> dict[str, str | None
                 "updated_at": iso_now(),
                 "photo_id": photo.id,
                 "user_id": DEFAULT_USER_ID,
-                "source_account_id": DEFAULT_SOURCE_ACCOUNT_ID,
             },
         )
         session.commit()

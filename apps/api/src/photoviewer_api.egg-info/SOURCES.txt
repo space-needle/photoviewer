@@ -2,6 +2,7 @@ pyproject.toml
 src/api/__init__.py
 src/api/db/__init__.py
 src/api/db/connection.py
+src/api/db/defaults.py
 src/api/db/models.py
 src/api/db/session.py
 src/api/routes/__init__.py

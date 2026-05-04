@@ -92,6 +92,30 @@ docker compose up -d --build
 docker compose exec api python scripts/ingest_local_folder.py --root /photos
 ```
 
+## OneDrive Sync
+
+OneDrive sync uses Microsoft Graph device code auth, so it works on the OCI VM without a browser. Set these before starting Compose:
+
+```bash
+export MS_CLIENT_ID='<azure-app-client-id>'
+export MS_TENANT_ID='common'
+export ONEDRIVE_SCOPES='Files.Read offline_access User.Read'
+```
+
+Authenticate once and follow the printed device login instructions:
+
+```bash
+docker compose exec api python scripts/sync_onedrive.py auth
+```
+
+Then sync OneDrive image metadata:
+
+```bash
+docker compose exec api python scripts/sync_onedrive.py sync
+```
+
+The MSAL token cache is stored under `/data/msal_token_cache.bin`, backed by the mounted `./data` volume. The first sync uses Microsoft Graph delta; later syncs reuse the saved delta cursor in `source_accounts.sync_cursor`.
+
 The migrations create:
 
 - `users`

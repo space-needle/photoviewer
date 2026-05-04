@@ -30,7 +30,10 @@ SCHEMA_STATEMENTS = (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       provider TEXT NOT NULL,
+      provider_user_id TEXT,
       account_label TEXT NOT NULL,
+      display_name TEXT,
+      sync_cursor TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE(user_id, provider, account_label),
@@ -43,6 +46,9 @@ SCHEMA_STATEMENTS = (
       user_id TEXT NOT NULL,
       source_account_id TEXT NOT NULL,
       source_type TEXT NOT NULL,
+      provider_photo_id TEXT,
+      provider_drive_id TEXT,
+      provider_web_url TEXT,
       file_path TEXT NOT NULL,
       file_path_hash TEXT NOT NULL,
       file_name TEXT NOT NULL,
@@ -55,6 +61,7 @@ SCHEMA_STATEMENTS = (
       height INTEGER,
       thumbnail_path TEXT,
       fingerprint TEXT,
+      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE(source_account_id, file_path_hash),
@@ -64,6 +71,7 @@ SCHEMA_STATEMENTS = (
     """,
     "CREATE INDEX IF NOT EXISTS idx_photos_user_timestamp ON photos(user_id, timestamp_normalized);",
     "CREATE INDEX IF NOT EXISTS idx_photos_source_account_timestamp ON photos(source_account_id, timestamp_normalized);",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_photos_source_account_provider_photo_id ON photos(source_account_id, provider_photo_id);",
     "CREATE INDEX IF NOT EXISTS idx_photos_timestamp ON photos(timestamp_normalized);",
     "CREATE INDEX IF NOT EXISTS idx_photos_lat_lon ON photos(latitude, longitude);",
     "CREATE INDEX IF NOT EXISTS idx_photos_fingerprint ON photos(fingerprint);",
@@ -143,6 +151,7 @@ def initialize_database() -> None:
     with get_connection() as connection:
         for statement in SCHEMA_STATEMENTS:
             connection.execute(statement)
+        ensure_sqlite_source_account_columns(connection)
         ensure_sqlite_identity(connection)
         ensure_sqlite_photo_owner_columns(connection)
 
@@ -162,16 +171,22 @@ def ensure_sqlite_identity(connection: sqlite3.Connection) -> None:
           id,
           user_id,
           provider,
+          provider_user_id,
           account_label,
+          display_name,
+          sync_cursor,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             DEFAULT_SOURCE_ACCOUNT_ID,
             DEFAULT_USER_ID,
             "local",
+            None,
             "Local Photos",
+            "Local Photos",
+            None,
             now,
             now,
         ),
@@ -200,9 +215,33 @@ def ensure_sqlite_photo_owner_columns(connection: sqlite3.Connection) -> None:
                 "UPDATE photos SET file_path_hash = ? WHERE id = ?",
                 (hashlib.sha256(str(row["file_path"]).encode("utf-8")).hexdigest(), row["id"]),
             )
+    for column_name in (
+        "provider_photo_id",
+        "provider_drive_id",
+        "provider_web_url",
+        "deleted_at",
+    ):
+        if column_name not in columns:
+            connection.execute(f"ALTER TABLE photos ADD COLUMN {column_name} TEXT")
     connection.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS uq_photos_source_account_file_path_hash
         ON photos(source_account_id, file_path_hash)
         """,
     )
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_photos_source_account_provider_photo_id
+        ON photos(source_account_id, provider_photo_id)
+        """,
+    )
+
+
+def ensure_sqlite_source_account_columns(connection: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(source_accounts)").fetchall()
+    }
+    for column_name in ("provider_user_id", "display_name", "sync_cursor"):
+        if column_name not in columns:
+            connection.execute(f"ALTER TABLE source_accounts ADD COLUMN {column_name} TEXT")
