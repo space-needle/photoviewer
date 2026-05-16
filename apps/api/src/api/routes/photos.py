@@ -3,9 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from api.services.photos import get_photo, get_photo_range, list_photos_in_bucket
+from api.db.connection import THUMBNAILS_DIR
+from api.services.photos import (
+    ensure_thumbnail,
+    get_onedrive_download_url,
+    get_photo,
+    get_photo_range,
+    list_photos_in_bucket,
+)
 from api.services.timeline import parse_iso_timestamp
 
 
@@ -41,9 +48,33 @@ def get_photo_detail(photo_id: str) -> dict[str, object | None]:
     return get_photo(photo_id).to_detail()
 
 
-@router.get("/{photo_id}/file")
-def get_photo_file(photo_id: str) -> FileResponse:
+@router.get("/{photo_id}/thumbnail")
+def get_photo_thumbnail(photo_id: str) -> Response:
     photo = get_photo(photo_id)
+
+    if photo.source_type == "onedrive":
+        return RedirectResponse(get_onedrive_download_url(photo))
+
+    ensured = ensure_thumbnail(photo_id)
+    thumbnail_path = ensured.get("thumbnail_path")
+    if not thumbnail_path:
+        raise HTTPException(status_code=404, detail="Thumbnail not found.")
+
+    thumbnail_file = THUMBNAILS_DIR / Path(str(thumbnail_path)).name
+
+    if not thumbnail_file.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail not found.")
+
+    return FileResponse(thumbnail_file)
+
+
+@router.get("/{photo_id}/file")
+def get_photo_file(photo_id: str) -> Response:
+    photo = get_photo(photo_id)
+
+    if photo.source_type == "onedrive":
+        return RedirectResponse(get_onedrive_download_url(photo))
+
     file_path = Path(photo.file_path)
 
     if not file_path.exists():

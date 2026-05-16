@@ -146,7 +146,11 @@ export function BucketDetailPanel(props: BucketDetailPanelProps) {
             >
               <img
                 className="thumbnailImage"
-                src={toApiAssetUrl(photo.thumbnail_path) ?? ""}
+                src={
+                  toApiAssetUrl(photo.thumbnail_url) ??
+                  toApiAssetUrl(photo.thumbnail_path) ??
+                  ""
+                }
                 alt={photo.file_name}
                 loading="lazy"
               />

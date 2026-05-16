@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from api.db.defaults import DEFAULT_USER_ID
 from api.db.session import get_session
+from api.services.photos import photo_file_url, photo_thumbnail_url
 from api.services.timeline import parse_iso_timestamp
 
 
@@ -86,6 +87,8 @@ def get_map_points(
                 "thumbnail_path": (
                     str(row["thumbnail_path"]) if row["thumbnail_path"] else None
                 ),
+                "thumbnail_url": photo_thumbnail_url(str(row["id"])),
+                "file_url": photo_file_url(str(row["id"])),
                 "timestamp_normalized": str(row["timestamp_normalized"]),
                 "file_name": str(row["file_name"]),
             }

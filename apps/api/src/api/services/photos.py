@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
+import msal
+import requests
 from sqlalchemy import text
 
-from api.db.connection import THUMBNAILS_DIR
+from api.db.connection import DATA_DIR, THUMBNAILS_DIR
 from api.db.defaults import DEFAULT_USER_ID
 from api.db.session import get_session
 
@@ -32,10 +35,19 @@ else:
 
 
 THUMBNAIL_MAX_DIMENSION = 320
+GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 
 
 def iso_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def photo_thumbnail_url(photo_id: str) -> str:
+    return f"/photos/{photo_id}/thumbnail"
+
+
+def photo_file_url(photo_id: str) -> str:
+    return f"/photos/{photo_id}/file"
 
 
 @dataclass(slots=True)
@@ -106,6 +118,8 @@ class PhotoRecord:
             "file_path": self.file_path,
             "file_name": self.file_name,
             "thumbnail_path": self.thumbnail_path,
+            "thumbnail_url": photo_thumbnail_url(self.id),
+            "file_url": photo_file_url(self.id),
             "timestamp_normalized": self.timestamp_normalized,
             "latitude": self.latitude,
             "longitude": self.longitude,
@@ -131,11 +145,154 @@ class PhotoRecord:
             "width": self.width,
             "height": self.height,
             "thumbnail_path": self.thumbnail_path,
+            "thumbnail_url": photo_thumbnail_url(self.id),
+            "file_url": photo_file_url(self.id),
             "fingerprint": self.fingerprint,
             "deleted_at": self.deleted_at,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+
+
+def get_scopes() -> list[str]:
+    raw_scopes = os.environ.get("ONEDRIVE_SCOPES", "Files.Read offline_access User.Read")
+    return [scope for scope in raw_scopes.split() if scope]
+
+
+def get_client_id() -> str:
+    client_id = os.environ.get("MS_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(
+            status_code=503,
+            detail="OneDrive account needs re-authentication.",
+        )
+    return client_id
+
+
+def get_authority() -> str:
+    tenant_id = os.environ.get("MS_TENANT_ID", "common")
+    return f"https://login.microsoftonline.com/{tenant_id}"
+
+
+def get_token_cache_path() -> Path:
+    return DATA_DIR / "msal_token_cache.bin"
+
+
+def acquire_onedrive_access_token() -> str:
+    cache_path = get_token_cache_path()
+    if not cache_path.exists():
+        raise HTTPException(
+            status_code=401,
+            detail="OneDrive account needs re-authentication.",
+        )
+
+    cache = msal.SerializableTokenCache()
+    cache.deserialize(cache_path.read_text())
+    app = msal.PublicClientApplication(
+        client_id=get_client_id(),
+        authority=get_authority(),
+        token_cache=cache,
+    )
+    accounts = app.get_accounts()
+    if not accounts:
+        raise HTTPException(
+            status_code=401,
+            detail="OneDrive account needs re-authentication.",
+        )
+
+    result = app.acquire_token_silent(get_scopes(), account=accounts[0])
+    if not result or "access_token" not in result:
+        raise HTTPException(
+            status_code=401,
+            detail="OneDrive account needs re-authentication.",
+        )
+
+    if cache.has_state_changed:
+        cache_path.write_text(cache.serialize())
+
+    return str(result["access_token"])
+
+
+def get_onedrive_download_url(photo: PhotoRecord) -> str:
+    if not photo.provider_photo_id:
+        raise HTTPException(status_code=404, detail="OneDrive photo metadata is incomplete.")
+
+    access_token = acquire_onedrive_access_token()
+    if photo.provider_drive_id:
+        graph_url = (
+            f"{GRAPH_BASE_URL}/drives/{photo.provider_drive_id}"
+            f"/items/{photo.provider_photo_id}"
+        )
+    else:
+        graph_url = f"{GRAPH_BASE_URL}/me/drive/items/{photo.provider_photo_id}"
+
+    try:
+        response = requests.get(
+            graph_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=30,
+        )
+    except requests.RequestException as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach Microsoft Graph for this photo.",
+        ) from error
+
+    if response.status_code in {401, 403}:
+        raise HTTPException(
+            status_code=401,
+            detail="OneDrive account needs re-authentication.",
+        )
+
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail="OneDrive photo not found.")
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Microsoft Graph photo request failed with status {response.status_code}.",
+        )
+
+    payload = response.json()
+    download_url = payload.get("@microsoft.graph.downloadUrl")
+    if not download_url:
+        download_url = get_onedrive_content_redirect_url(graph_url, access_token)
+
+    return str(download_url)
+
+
+def get_onedrive_content_redirect_url(graph_url: str, access_token: str) -> str:
+    try:
+        response = requests.get(
+            f"{graph_url}/content",
+            headers={"Authorization": f"Bearer {access_token}"},
+            allow_redirects=False,
+            timeout=30,
+        )
+    except requests.RequestException as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach Microsoft Graph for this photo.",
+        ) from error
+
+    if response.status_code in {301, 302, 303, 307, 308}:
+        location = response.headers.get("Location")
+        if location:
+            return location
+
+    if response.status_code in {401, 403}:
+        raise HTTPException(
+            status_code=401,
+            detail="OneDrive account needs re-authentication.",
+        )
+
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail="OneDrive photo not found.")
+
+    raise HTTPException(
+        status_code=502,
+        detail="Microsoft Graph did not provide a photo download URL.",
+    )
 
 
 def list_photos_in_bucket(
@@ -242,6 +399,10 @@ def get_photo(photo_id: str) -> PhotoRecord:
 
 def ensure_thumbnail(photo_id: str, force: bool = False) -> dict[str, str | None]:
     photo = get_photo(photo_id)
+
+    if photo.source_type == "onedrive":
+        return {"id": photo.id, "thumbnail_path": photo_thumbnail_url(photo.id)}
+
     source_path = Path(photo.file_path)
 
     if not source_path.exists():

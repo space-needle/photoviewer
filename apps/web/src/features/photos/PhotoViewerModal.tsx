@@ -33,7 +33,12 @@ export function PhotoViewerModal(props: PhotoViewerModalProps) {
     return null;
   }
 
-  const previewSrc = toApiAssetUrl(photo.thumbnail_path) ?? getPhotoFileUrl(photo.id);
+  const fullPhotoSrc = toApiAssetUrl(photo.file_url) ?? getPhotoFileUrl(photo.id);
+  const previewSrc =
+    fullPhotoSrc ??
+    toApiAssetUrl(photo.thumbnail_url) ??
+    toApiAssetUrl(photo.thumbnail_path) ??
+    getPhotoFileUrl(photo.id);
 
   return (
     <div className="modalBackdrop" role="presentation" onClick={onClose}>
@@ -55,7 +60,7 @@ export function PhotoViewerModal(props: PhotoViewerModalProps) {
           <p className="placeholderBody">{photo.timestamp_normalized}</p>
           <a
             className="importButton modalLink"
-            href={getPhotoFileUrl(photo.id)}
+            href={fullPhotoSrc}
             target="_blank"
             rel="noreferrer"
           >

@@ -143,6 +143,8 @@ export type PhotoListItem = {
   file_path: string;
   file_name: string;
   thumbnail_path: string | null;
+  thumbnail_url: string;
+  file_url: string;
   timestamp_normalized: string;
   latitude: number | null;
   longitude: number | null;
@@ -183,6 +185,8 @@ export type MapPoint = {
   lat: number;
   lon: number;
   thumbnail_path: string | null;
+  thumbnail_url: string;
+  file_url: string;
   timestamp_normalized: string;
   file_name: string;
 };
@@ -259,6 +263,10 @@ export async function ensureThumbnails(
 
 export function getPhotoFileUrl(photoId: string): string {
   return `${apiBaseUrl}/photos/${photoId}/file`;
+}
+
+export function getPhotoThumbnailUrl(photoId: string): string {
+  return `${apiBaseUrl}/photos/${photoId}/thumbnail`;
 }
 
 export async function getMapPoints(params?: {

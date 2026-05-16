@@ -313,7 +313,8 @@ function buildPopup(point: MapPoint): HTMLElement {
   timestamp.textContent = point.timestamp_normalized;
   popup.append(timestamp);
 
-  const thumbnailUrl = toApiAssetUrl(point.thumbnail_path);
+  const thumbnailUrl =
+    toApiAssetUrl(point.thumbnail_url) ?? toApiAssetUrl(point.thumbnail_path);
   if (thumbnailUrl) {
     const button = document.createElement("button");
     button.type = "button";
