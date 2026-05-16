@@ -50,6 +50,13 @@ class SyncSummary:
     delta_saved: bool = False
 
 
+@dataclass(slots=True)
+class SyncOptions:
+    progress_every: int
+    skip_path_contains: list[str]
+    verbose: bool
+
+
 def iso_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -58,8 +65,40 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Authenticate and sync OneDrive photo metadata.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("auth", help="Run Microsoft device code authentication.")
-    subparsers.add_parser("sync", help="Sync OneDrive image metadata with Graph delta.")
+    sync_parser = subparsers.add_parser("sync", help="Sync OneDrive image metadata with Graph delta.")
+    sync_parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=1000,
+        help="Print progress every N Graph items processed. Default: 1000.",
+    )
+    sync_parser.add_argument(
+        "--skip-path-contains",
+        action="append",
+        default=[],
+        help="Skip items whose OneDrive path contains this text. Can be repeated.",
+    )
+    sync_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print skipped path examples and selected processing details.",
+    )
     return parser.parse_args()
+
+
+def build_sync_options(args: argparse.Namespace) -> SyncOptions:
+    env_filters = [
+        value.strip()
+        for value in os.environ.get("ONEDRIVE_SKIP_PATH_CONTAINS", "").split(",")
+        if value.strip()
+    ]
+    cli_filters = [value for value in args.skip_path_contains if value]
+    progress_every = max(1, int(args.progress_every))
+    return SyncOptions(
+        progress_every=progress_every,
+        skip_path_contains=[*env_filters, *cli_filters],
+        verbose=bool(args.verbose),
+    )
 
 
 def get_scopes() -> list[str]:
@@ -210,6 +249,65 @@ def is_image_item(item: dict[str, Any]) -> bool:
 
 def hash_value(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def format_elapsed(seconds: float) -> str:
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def print_progress(summary: SyncSummary, started_at: float) -> None:
+    print(
+        f"Processed {summary.scanned} items | "
+        f"images={summary.images} inserted={summary.inserted} "
+        f"updated={summary.updated} deleted_marked={summary.deleted_marked} "
+        f"skipped={summary.skipped} elapsed={format_elapsed(time.monotonic() - started_at)}"
+    )
+
+
+def maybe_print_progress(summary: SyncSummary, started_at: float, progress_every: int) -> None:
+    if summary.scanned % progress_every == 0:
+        print_progress(summary, started_at)
+
+
+def comparable_drive_item_path(item: dict[str, Any]) -> str:
+    parent_reference = item.get("parentReference") or {}
+    parent_path = str(parent_reference.get("path") or "")
+    name = str(item.get("name") or "")
+    return normalize_comparable_path(f"{parent_path}/{name}")
+
+
+def normalize_comparable_path(value: str) -> str:
+    normalized = value.replace("\\", "/").lower()
+    while "//" in normalized:
+        normalized = normalized.replace("//", "/")
+    return normalized
+
+
+def normalize_skip_filter(value: str) -> str:
+    normalized = normalize_comparable_path(value.strip())
+    return normalized.strip("/")
+
+
+def should_skip_item_path(item: dict[str, Any], skip_filters: list[str]) -> bool:
+    if not skip_filters:
+        return False
+
+    item_path = comparable_drive_item_path(item)
+    path_parts = [part for part in item_path.split("/") if part]
+    for raw_filter in skip_filters:
+        normalized_filter = normalize_skip_filter(raw_filter)
+        if not normalized_filter:
+            continue
+        if "/" in normalized_filter:
+            if f"/{normalized_filter}/" in f"/{item_path.strip('/')}/":
+                return True
+            continue
+        if normalized_filter in path_parts:
+            return True
+    return False
 
 
 def normalize_graph_timestamp(value: str | None) -> str | None:
@@ -416,7 +514,7 @@ def upsert_photo(db: Session, source_account: SourceAccount, item: dict[str, Any
     return "updated" if existing else "inserted"
 
 
-def sync() -> None:
+def sync(options: SyncOptions) -> None:
     initialize_storage()
     access_token = acquire_access_token()
     graph_session = requests.Session()
@@ -429,6 +527,13 @@ def sync() -> None:
         next_url = source_account.sync_cursor or f"{GRAPH_BASE_URL}/me/drive/root/delta"
         summary = SyncSummary()
         delta_link: str | None = None
+        started_at = time.monotonic()
+
+        if options.skip_path_contains:
+            print(
+                "Skipping OneDrive paths containing: "
+                + ", ".join(options.skip_path_contains)
+            )
 
         while next_url:
             payload = graph_get(graph_session, next_url)
@@ -436,6 +541,7 @@ def sync() -> None:
                 summary.scanned += 1
                 if not isinstance(item, dict):
                     summary.skipped += 1
+                    maybe_print_progress(summary, started_at, options.progress_every)
                     continue
 
                 provider_photo_id = str(item.get("id") or "")
@@ -444,18 +550,33 @@ def sync() -> None:
                         summary.deleted_marked += 1
                     else:
                         summary.skipped += 1
+                    maybe_print_progress(summary, started_at, options.progress_every)
+                    continue
+
+                if should_skip_item_path(item, options.skip_path_contains):
+                    summary.skipped += 1
+                    if options.verbose:
+                        print(f"Skipped by path filter: {comparable_drive_item_path(item)}")
+                    maybe_print_progress(summary, started_at, options.progress_every)
                     continue
 
                 if not is_image_item(item):
                     summary.skipped += 1
+                    if options.verbose:
+                        print(f"Skipped non-image item: {comparable_drive_item_path(item)}")
+                    maybe_print_progress(summary, started_at, options.progress_every)
                     continue
 
                 summary.images += 1
                 result = upsert_photo(db, source_account, item)
+                if options.verbose:
+                    print(f"{result.title()} image metadata: {comparable_drive_item_path(item)}")
                 if result == "inserted":
                     summary.inserted += 1
                 else:
                     summary.updated += 1
+
+                maybe_print_progress(summary, started_at, options.progress_every)
 
             db.commit()
             next_url = payload.get("@odata.nextLink")
@@ -474,6 +595,7 @@ def sync() -> None:
             f"scanned={summary.scanned} images={summary.images} "
             f"inserted={summary.inserted} updated={summary.updated} "
             f"deleted_marked={summary.deleted_marked} skipped={summary.skipped} "
+            f"elapsed={format_elapsed(time.monotonic() - started_at)} "
             f"deltaLink_saved={'yes' if summary.delta_saved else 'no'}"
         )
     except Exception:
@@ -488,7 +610,7 @@ def main() -> int:
     if args.command == "auth":
         auth()
     elif args.command == "sync":
-        sync()
+        sync(build_sync_options(args))
     else:
         raise RuntimeError(f"Unknown command: {args.command}")
     return 0

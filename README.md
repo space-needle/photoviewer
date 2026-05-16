@@ -114,6 +114,18 @@ Then sync OneDrive image metadata:
 docker compose exec api python scripts/sync_onedrive.py sync
 ```
 
+For large libraries, tune progress output and skip noisy folders:
+
+```bash
+docker compose exec api python scripts/sync_onedrive.py sync --progress-every 1000 --skip-path-contains /tier2/
+```
+
+Skip filters can also come from the environment:
+
+```bash
+export ONEDRIVE_SKIP_PATH_CONTAINS=/tier2/
+```
+
 The MSAL token cache is stored under `/data/msal_token_cache.bin`, backed by the mounted `./data` volume. The first sync uses Microsoft Graph delta; later syncs reuse the saved delta cursor in `source_accounts.sync_cursor`.
 
 The migrations create:
