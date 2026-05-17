@@ -141,6 +141,7 @@ The migrations create:
 - `photos`
 - `ingestions`
 - `ingestion_errors`
+- `photo_day_counts`
 - `visits`
 - `photo_visits`
 
@@ -166,6 +167,12 @@ Restart:
 
 ```bash
 docker compose restart
+```
+
+Rebuild timeline daily aggregates after a large ingestion/sync:
+
+```bash
+docker compose exec api python scripts/rebuild_timeline_day_counts.py
 ```
 
 Stop:

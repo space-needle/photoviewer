@@ -76,6 +76,22 @@ SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_photos_lat_lon ON photos(latitude, longitude);",
     "CREATE INDEX IF NOT EXISTS idx_photos_fingerprint ON photos(fingerprint);",
     """
+    CREATE TABLE IF NOT EXISTS photo_day_counts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_account_id TEXT,
+      day TEXT NOT NULL,
+      photo_count INTEGER NOT NULL,
+      gps_photo_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, source_account_id, day),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (source_account_id) REFERENCES source_accounts(id)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_photo_day_counts_user_day ON photo_day_counts(user_id, day);",
+    """
     CREATE TABLE IF NOT EXISTS ingestions (
       id TEXT PRIMARY KEY,
       root_path TEXT NOT NULL,

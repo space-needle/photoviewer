@@ -74,6 +74,27 @@ class Photo(Base):
     updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class PhotoDayCount(Base):
+    __tablename__ = "photo_day_counts"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "source_account_id",
+            "day",
+            name="uq_photo_day_counts_user_source_day",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    source_account_id: Mapped[str | None] = mapped_column(ForeignKey("source_accounts.id"))
+    day: Mapped[str] = mapped_column(String(10), nullable=False)
+    photo_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    gps_photo_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class Ingestion(Base):
     __tablename__ = "ingestions"
 

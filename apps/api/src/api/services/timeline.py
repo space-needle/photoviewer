@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from api.db.defaults import DEFAULT_USER_ID
 from api.db.session import get_session
@@ -100,6 +101,11 @@ def format_gap_label(empty_bucket_count: int, zoom: ZoomLevel) -> str:
 
 
 def fetch_bucket_counts(start: datetime, end: datetime, zoom: ZoomLevel) -> dict[datetime, int]:
+    if zoom == "overview":
+        aggregate_counts = fetch_daily_aggregate_counts(start, end)
+        if aggregate_counts is not None:
+            return aggregate_counts
+
     bucket_delta = ZOOM_CONFIG[zoom]["bucket_delta"]
     assert isinstance(bucket_delta, timedelta)
 
@@ -130,6 +136,58 @@ def fetch_bucket_counts(start: datetime, end: datetime, zoom: ZoomLevel) -> dict
         if bucket_start >= end:
             continue
         counts[bucket_start] = counts.get(bucket_start, 0) + 1
+
+    return counts
+
+
+def fetch_daily_aggregate_counts(start: datetime, end: datetime) -> dict[datetime, int] | None:
+    start_day = start.date().isoformat()
+    end_day = end.date().isoformat()
+    if end.time() != datetime.min.time():
+        end_day = (end.date() + timedelta(days=1)).isoformat()
+
+    try:
+        with get_session() as session:
+            aggregate_row_count = session.execute(
+                text(
+                    """
+                SELECT COUNT(*)
+                FROM photo_day_counts
+                WHERE user_id = :user_id
+                  AND source_account_id IS NULL
+                """
+                ),
+                {"user_id": DEFAULT_USER_ID},
+            ).scalar_one()
+
+            if int(aggregate_row_count) == 0:
+                return None
+
+            rows = session.execute(
+                text(
+                    """
+                SELECT day, photo_count
+                FROM photo_day_counts
+                WHERE user_id = :user_id
+                  AND source_account_id IS NULL
+                  AND day >= :start_day
+                  AND day < :end_day
+                ORDER BY day
+                """
+                ),
+                {
+                    "user_id": DEFAULT_USER_ID,
+                    "start_day": start_day,
+                    "end_day": end_day,
+                },
+            ).mappings().all()
+    except SQLAlchemyError:
+        return None
+
+    counts: dict[datetime, int] = {}
+    for row in rows:
+        day = datetime.fromisoformat(str(row["day"]))
+        counts[day] = int(row["photo_count"])
 
     return counts
 
