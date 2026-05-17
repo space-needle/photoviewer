@@ -93,7 +93,11 @@ export function HeatRibbonTimeline(props: HeatRibbonTimelineProps) {
   } | null>(null);
   const pendingZoomAnchorRef = useRef<{
     focusOffset: number;
-    ratio: number;
+    timestamp: number;
+  } | null>(null);
+  const fallbackZoomAnchorRef = useRef<{
+    focusOffset: number;
+    timestamp: number;
   } | null>(null);
   const maxVisibleCount = Math.max(
     0,
@@ -172,12 +176,14 @@ export function HeatRibbonTimeline(props: HeatRibbonTimelineProps) {
 
       const viewport = container.getBoundingClientRect();
       const focusOffset = Math.max(0, Math.min(clientY - viewport.top, viewport.height));
-      const scrollHeight = Math.max(container.scrollHeight, 1);
+      const anchorTimestamp = getTimestampAtViewportOffset(container, focusOffset);
 
-      pendingZoomAnchorRef.current = {
-        focusOffset,
-        ratio: (container.scrollTop + focusOffset) / scrollHeight,
-      };
+      if (anchorTimestamp !== null) {
+        pendingZoomAnchorRef.current = {
+          focusOffset,
+          timestamp: anchorTimestamp,
+        };
+      }
       onScaleChange(clampedScale);
     },
     [onScaleChange, scale],
@@ -234,17 +240,34 @@ export function HeatRibbonTimeline(props: HeatRibbonTimelineProps) {
   }, []);
 
   useLayoutEffect(() => {
-    const anchor = pendingZoomAnchorRef.current;
+    const anchor = pendingZoomAnchorRef.current ?? fallbackZoomAnchorRef.current;
     const container = scrollContainerRef.current;
 
     if (!anchor || !container) {
       return;
     }
 
-    pendingZoomAnchorRef.current = null;
-    container.scrollTop = anchor.ratio * container.scrollHeight - anchor.focusOffset;
+    if (restoreScrollToTimestamp(container, anchor.timestamp, anchor.focusOffset)) {
+      pendingZoomAnchorRef.current = null;
+      fallbackZoomAnchorRef.current = null;
+    }
     window.requestAnimationFrame(reportVisibleRange);
   }, [buckets, reportVisibleRange, scale, zoom]);
+
+  useLayoutEffect(() => {
+    return () => {
+      const container = scrollContainerRef.current;
+      if (!container || pendingZoomAnchorRef.current) {
+        return;
+      }
+
+      const focusOffset = container.clientHeight / 2;
+      const timestamp = getTimestampAtViewportOffset(container, focusOffset);
+      if (timestamp !== null) {
+        fallbackZoomAnchorRef.current = { focusOffset, timestamp };
+      }
+    };
+  }, [scale, zoom]);
 
   useEffect(() => {
     lastVisibleRangeRef.current = null;
@@ -1009,6 +1032,118 @@ function formatPhotoCount(count: number): string {
 
 function clampScale(value: number): number {
   return Math.min(MAX_TIMELINE_SCALE, Math.max(MIN_TIMELINE_SCALE, value));
+}
+
+function getTimelineRangeElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>("[data-visible-start][data-visible-end]"),
+  );
+}
+
+function getElementTimeRange(element: HTMLElement): {
+  start: number;
+  end: number;
+} | null {
+  const startValue = element.dataset.visibleStart;
+  const endValue = element.dataset.visibleEnd;
+  if (!startValue || !endValue) {
+    return null;
+  }
+
+  const start = new Date(startValue).getTime();
+  const end = new Date(endValue).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || start >= end) {
+    return null;
+  }
+
+  return { start, end };
+}
+
+function getTimestampAtViewportOffset(
+  container: HTMLElement,
+  focusOffset: number,
+): number | null {
+  const focusY = container.getBoundingClientRect().top + focusOffset;
+  const elements = getTimelineRangeElements(container);
+  let nearest: {
+    element: HTMLElement;
+    distance: number;
+    range: { start: number; end: number };
+  } | null = null;
+
+  for (const element of elements) {
+    const range = getElementTimeRange(element);
+    if (!range) {
+      continue;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const height = Math.max(rect.height, 1);
+    if (focusY >= rect.top && focusY <= rect.bottom) {
+      const ratio = Math.max(0, Math.min(1, (focusY - rect.top) / height));
+      return range.start + (range.end - range.start) * ratio;
+    }
+
+    const distance = Math.min(Math.abs(focusY - rect.top), Math.abs(focusY - rect.bottom));
+    if (!nearest || distance < nearest.distance) {
+      nearest = { element, distance, range };
+    }
+  }
+
+  if (!nearest) {
+    return null;
+  }
+
+  const rect = nearest.element.getBoundingClientRect();
+  return focusY < rect.top ? nearest.range.start : nearest.range.end;
+}
+
+function restoreScrollToTimestamp(
+  container: HTMLElement,
+  timestamp: number,
+  focusOffset: number,
+): boolean {
+  const elements = getTimelineRangeElements(container);
+  let nearest: {
+    element: HTMLElement;
+    distance: number;
+    range: { start: number; end: number };
+  } | null = null;
+
+  for (const element of elements) {
+    const range = getElementTimeRange(element);
+    if (!range) {
+      continue;
+    }
+
+    if (timestamp >= range.start && timestamp < range.end) {
+      const ratio = Math.max(
+        0,
+        Math.min(1, (timestamp - range.start) / (range.end - range.start)),
+      );
+      container.scrollTop = element.offsetTop + element.offsetHeight * ratio - focusOffset;
+      return true;
+    }
+
+    const distance = Math.min(
+      Math.abs(timestamp - range.start),
+      Math.abs(timestamp - range.end),
+    );
+    if (!nearest || distance < nearest.distance) {
+      nearest = { element, distance, range };
+    }
+  }
+
+  if (!nearest) {
+    return false;
+  }
+
+  const useEnd = timestamp > nearest.range.end;
+  container.scrollTop =
+    nearest.element.offsetTop +
+    (useEnd ? nearest.element.offsetHeight : 0) -
+    focusOffset;
+  return true;
 }
 
 function getTouchDistance(touches: PinchTouchList): number {

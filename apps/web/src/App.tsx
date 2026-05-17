@@ -357,7 +357,7 @@ function TimelinePage(props: {
         </div>
       ) : null}
 
-      {!isLoading && !error && timelineData ? (
+      {!error && timelineData ? (
         <>
           <HeatRibbonTimeline
             buckets={timelineData.buckets}
