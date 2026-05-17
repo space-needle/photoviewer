@@ -91,18 +91,18 @@ export function PhotoMap(props: PhotoMapProps) {
       const isHighlighted = isPointInBucket(point, selectedBucket);
       const marker = isHighlighted
         ? L.circleMarker(position, {
-            radius: 7,
-            color: "#fff7ed",
-            weight: 2,
+            radius: 6,
+            color: "rgba(15, 23, 42, 0.92)",
+            weight: 1.5,
             fillColor: "#fb923c",
-            fillOpacity: 0.78,
+            fillOpacity: 0.82,
           }).bindPopup(popup)
         : L.circleMarker(position, {
             radius: 4,
-            color: "rgba(255,255,255,0.66)",
+            color: "rgba(8, 47, 73, 0.86)",
             weight: 1,
             fillColor: "#38bdf8",
-            fillOpacity: 0.7,
+            fillOpacity: 0.74,
           }).bindPopup(popup);
 
       marker.on("popupopen", () => {
@@ -122,11 +122,11 @@ export function PhotoMap(props: PhotoMapProps) {
       bounds.extend(position);
       const isActive = activeVisit?.id === visit.id;
       const marker = L.circleMarker(position, {
-        radius: isActive ? 8 : 5,
-        color: isActive ? "#fef9c3" : "rgba(255,255,255,0.7)",
-        weight: isActive ? 2 : 1,
+        radius: isActive ? 7 : 5,
+        color: isActive ? "rgba(15, 23, 42, 0.92)" : "rgba(5, 46, 22, 0.86)",
+        weight: isActive ? 1.5 : 1,
         fillColor: isActive ? "#facc15" : "#22c55e",
-        fillOpacity: isActive ? 0.78 : 0.7,
+        fillOpacity: isActive ? 0.82 : 0.72,
       }).bindPopup(buildVisitPopup(visit));
 
       marker.on("click", () => onSelectVisit(visit));
@@ -239,10 +239,10 @@ class PhotoHeatLayer extends L.Layer {
 
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     context.clearRect(0, 0, size.x, size.y);
-    context.globalCompositeOperation = "lighter";
+    context.globalCompositeOperation = "source-over";
 
     const zoom = this.map.getZoom();
-    const radius = Math.max(22, Math.min(54, zoom * 3.8));
+    const radius = Math.max(18, Math.min(42, zoom * 3.1));
 
     this.points.forEach((point) => {
       const projected = this.map!.latLngToContainerPoint([point.lat, point.lon]);
@@ -254,11 +254,11 @@ class PhotoHeatLayer extends L.Layer {
         projected.y,
         radius,
       );
-      gradient.addColorStop(0, "rgba(255, 71, 87, 0.42)");
-      gradient.addColorStop(0.22, "rgba(251, 146, 60, 0.32)");
-      gradient.addColorStop(0.48, "rgba(250, 204, 21, 0.22)");
-      gradient.addColorStop(0.7, "rgba(34, 197, 94, 0.16)");
-      gradient.addColorStop(1, "rgba(99, 102, 241, 0)");
+      gradient.addColorStop(0, "rgba(239, 68, 68, 0.26)");
+      gradient.addColorStop(0.24, "rgba(249, 115, 22, 0.22)");
+      gradient.addColorStop(0.5, "rgba(234, 179, 8, 0.18)");
+      gradient.addColorStop(0.72, "rgba(34, 197, 94, 0.12)");
+      gradient.addColorStop(1, "rgba(59, 130, 246, 0)");
 
       context.fillStyle = gradient;
       context.beginPath();
