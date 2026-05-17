@@ -48,6 +48,8 @@ class SyncSummary:
     deleted_marked: int = 0
     skipped: int = 0
     delta_saved: bool = False
+    cursor_saved: bool = False
+    limit_reached: bool = False
 
 
 @dataclass(slots=True)
@@ -55,6 +57,7 @@ class SyncOptions:
     progress_every: int
     skip_path_contains: list[str]
     verbose: bool
+    max_items: int | None
 
 
 def iso_now() -> str:
@@ -83,6 +86,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print skipped path examples and selected processing details.",
     )
+    sync_parser.add_argument(
+        "--max-items",
+        type=int,
+        default=None,
+        help=(
+            "Stop after approximately N Graph items, saving a continuation cursor "
+            "after the current page completes."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -94,10 +106,14 @@ def build_sync_options(args: argparse.Namespace) -> SyncOptions:
     ]
     cli_filters = [value for value in args.skip_path_contains if value]
     progress_every = max(1, int(args.progress_every))
+    max_items = int(args.max_items) if args.max_items is not None else None
+    if max_items is not None and max_items < 1:
+        raise ValueError("--max-items must be greater than 0.")
     return SyncOptions(
         progress_every=progress_every,
         skip_path_contains=[*env_filters, *cli_filters],
         verbose=bool(args.verbose),
+        max_items=max_items,
     )
 
 
@@ -265,6 +281,12 @@ def print_progress(summary: SyncSummary, started_at: float) -> None:
         f"updated={summary.updated} deleted_marked={summary.deleted_marked} "
         f"skipped={summary.skipped} elapsed={format_elapsed(time.monotonic() - started_at)}"
     )
+
+
+def save_sync_cursor(db: Session, source_account: SourceAccount, cursor: str) -> None:
+    source_account.sync_cursor = cursor
+    source_account.updated_at = iso_now()
+    db.commit()
 
 
 def maybe_print_progress(summary: SyncSummary, started_at: float, progress_every: int) -> None:
@@ -535,6 +557,12 @@ def sync(options: SyncOptions) -> None:
                 + ", ".join(options.skip_path_contains)
             )
 
+        if options.max_items is not None:
+            print(
+                f"Batch limit enabled: processing about {options.max_items} Graph items. "
+                "The current page will finish before the continuation cursor is saved."
+            )
+
         while next_url:
             payload = graph_get(graph_session, next_url)
             for item in payload.get("value", []):
@@ -581,13 +609,24 @@ def sync(options: SyncOptions) -> None:
             db.commit()
             next_url = payload.get("@odata.nextLink")
             delta_link = payload.get("@odata.deltaLink") or delta_link
+            if (
+                options.max_items is not None
+                and summary.scanned >= options.max_items
+                and next_url
+            ):
+                save_sync_cursor(db, source_account, str(next_url))
+                summary.cursor_saved = True
+                summary.limit_reached = True
+                print(
+                    f"Batch limit reached after {summary.scanned} Graph items; "
+                    "saved continuation cursor for the next run."
+                )
+                break
             if next_url:
                 time.sleep(PAGE_PACING_SECONDS)
 
         if delta_link:
-            source_account.sync_cursor = delta_link
-            source_account.updated_at = iso_now()
-            db.commit()
+            save_sync_cursor(db, source_account, str(delta_link))
             summary.delta_saved = True
 
         print(
@@ -596,7 +635,9 @@ def sync(options: SyncOptions) -> None:
             f"inserted={summary.inserted} updated={summary.updated} "
             f"deleted_marked={summary.deleted_marked} skipped={summary.skipped} "
             f"elapsed={format_elapsed(time.monotonic() - started_at)} "
-            f"deltaLink_saved={'yes' if summary.delta_saved else 'no'}"
+            f"deltaLink_saved={'yes' if summary.delta_saved else 'no'} "
+            f"cursor_saved={'yes' if summary.cursor_saved else 'no'} "
+            f"limit_reached={'yes' if summary.limit_reached else 'no'}"
         )
     except Exception:
         db.rollback()
