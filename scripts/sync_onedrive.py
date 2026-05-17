@@ -39,6 +39,10 @@ MAX_GRAPH_RETRIES = 5
 PAGE_PACING_SECONDS = 0.3
 
 
+class GraphAuthenticationError(RuntimeError):
+    pass
+
+
 @dataclass(slots=True)
 class SyncSummary:
     scanned: int = 0
@@ -232,6 +236,11 @@ def graph_get(session: requests.Session, url: str, max_retries: int = MAX_GRAPH_
             if not isinstance(data, dict):
                 raise RuntimeError(f"Unexpected Graph response: {data}")
             return data
+
+        if response.status_code in {401, 403}:
+            raise GraphAuthenticationError(
+                f"Graph authentication failed {response.status_code}: {response.text}"
+            )
 
         if response.status_code in NON_RETRYABLE_STATUS_CODES:
             raise RuntimeError(f"Graph request failed {response.status_code}: {response.text}")
@@ -564,7 +573,26 @@ def sync(options: SyncOptions) -> None:
             )
 
         while next_url:
-            payload = graph_get(graph_session, next_url)
+            try:
+                payload = graph_get(graph_session, next_url)
+            except GraphAuthenticationError as error:
+                save_sync_cursor(db, source_account, str(next_url))
+                summary.cursor_saved = True
+                print(
+                    "OneDrive sync paused because Microsoft Graph authentication failed. "
+                    "Saved the current continuation cursor; run auth again, then rerun sync."
+                )
+                print(f"Auth error: {error}")
+                print(
+                    "OneDrive sync paused: "
+                    f"scanned={summary.scanned} images={summary.images} "
+                    f"inserted={summary.inserted} updated={summary.updated} "
+                    f"deleted_marked={summary.deleted_marked} skipped={summary.skipped} "
+                    f"elapsed={format_elapsed(time.monotonic() - started_at)} "
+                    "deltaLink_saved=no cursor_saved=yes limit_reached=no"
+                )
+                return
+
             for item in payload.get("value", []):
                 summary.scanned += 1
                 if not isinstance(item, dict):
