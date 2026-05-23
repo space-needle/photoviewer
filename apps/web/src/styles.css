@@ -330,6 +330,151 @@ input {
   font-weight: 800;
 }
 
+.mobileTenDayTimeline {
+  display: none;
+}
+
+.desktopTimelineContent {
+  display: block;
+}
+
+.tenDayMonthRow {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 38px;
+  border-top: 1px solid rgba(226, 232, 240, 0.72);
+}
+
+.tenDayMonthRow.yearStart {
+  margin-top: 10px;
+  border-top-color: rgba(148, 163, 184, 0.58);
+}
+
+.tenDayMonthLabel {
+  display: grid;
+  justify-items: end;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.tenDayMonthLabel strong {
+  color: #18304a;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
+.tenDayCells {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 8px;
+}
+
+.tenDayCell,
+.dayDrillCell {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.tenDayCell {
+  width: 34px;
+  height: 34px;
+}
+
+.tenDayCell:hover,
+.dayDrillCell:hover {
+  transform: translateY(-1px);
+}
+
+.tenDayCell.selected,
+.dayDrillCell.selected {
+  border-color: rgba(29, 78, 216, 0.96);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 0 5px rgba(37, 99, 235, 0.34);
+}
+
+.tenDayLevel0 {
+  background: rgba(203, 213, 225, 0.34);
+}
+
+.tenDayLevel1 {
+  background: #dbeafe;
+}
+
+.tenDayLevel2 {
+  background: #bfdbfe;
+}
+
+.tenDayLevel3 {
+  background: #93c5fd;
+}
+
+.tenDayLevel4 {
+  background: #60a5fa;
+}
+
+.tenDayLevel5 {
+  background: #2563eb;
+}
+
+.tenDayDetailPanel {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(86, 106, 126, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.tenDayDetailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tenDayDetailHeader strong,
+.tenDayDetailHeader span {
+  display: block;
+}
+
+.tenDayDetailHeader strong {
+  color: #18304a;
+}
+
+.tenDayDetailHeader span {
+  color: #607489;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.dayDrillGrid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.dayDrillCell {
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  color: #0f172a;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
 .monthTimeline {
   display: grid;
   gap: 0;
@@ -805,6 +950,22 @@ input {
   gap: 16px;
 }
 
+.selectionActions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.clearSelectionButton {
+  padding: 6px 10px;
+  border: 1px solid rgba(86, 106, 126, 0.16);
+  border-radius: 999px;
+  color: #496079;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .panelTitle {
   margin: 0;
   font-size: 1.2rem;
@@ -1144,5 +1305,23 @@ input {
 
   .thumbnailGrid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 719px) {
+  .timelineViewport {
+    padding: 14px 10px;
+  }
+
+  .timelineLegend {
+    display: none;
+  }
+
+  .mobileTenDayTimeline {
+    display: block;
+  }
+
+  .desktopTimelineContent {
+    display: none;
   }
 }

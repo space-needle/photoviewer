@@ -69,6 +69,11 @@ type TimelineItem =
       bucket: TimelineBucket;
     };
 
+type TenDayBucket = TimelineBucket & {
+  bucketIndex: 1 | 2 | 3;
+  label: string;
+};
+
 export function HeatRibbonTimeline(props: HeatRibbonTimelineProps) {
   const {
     buckets,
@@ -318,17 +323,26 @@ export function HeatRibbonTimeline(props: HeatRibbonTimelineProps) {
         onTouchCancel={handleTouchEnd}
       >
         {zoom === "overview" ? (
-          <OverviewDotTimeline
-            buckets={buckets}
-            scale={scale}
-            maxVisibleCount={maxVisibleCount}
-            onSelectBucket={onSelectBucket}
-            onSelectVisit={onSelectVisit}
-            onRenameVisit={onRenameVisit}
-            activeVisit={activeVisit}
-            selectedBucket={selectedBucket}
-            visits={visits}
-          />
+          <>
+            <MobileTimelineHeatmap
+              buckets={buckets}
+              selectedBucket={selectedBucket}
+              onSelectBucket={onSelectBucket}
+            />
+            <div className="desktopTimelineContent">
+              <OverviewDotTimeline
+                buckets={buckets}
+                scale={scale}
+                maxVisibleCount={maxVisibleCount}
+                onSelectBucket={onSelectBucket}
+                onSelectVisit={onSelectVisit}
+                onRenameVisit={onRenameVisit}
+                activeVisit={activeVisit}
+                selectedBucket={selectedBucket}
+                visits={visits}
+              />
+            </div>
+          </>
         ) : zoom === "mid" ? (
           <MidDotTimeline
             buckets={buckets}
@@ -352,6 +366,117 @@ export function HeatRibbonTimeline(props: HeatRibbonTimelineProps) {
         )}
       </div>
     </>
+  );
+}
+
+function MobileTimelineHeatmap(props: {
+  buckets: TimelineBucket[];
+  selectedBucket: TimelineBucket | null;
+  onSelectBucket: (bucket: TimelineBucket) => void;
+}) {
+  const { buckets, selectedBucket, onSelectBucket } = props;
+  const monthSegments = buildMonthSegments(buckets);
+  const maxTenDayCount = Math.max(
+    0,
+    ...monthSegments.flatMap((month) =>
+      buildTenDayBuckets(month).map((bucket) => bucket.photo_count),
+    ),
+  );
+  const selectedTenDayBucket = selectedBucket
+    ? findTenDayBucket(monthSegments, selectedBucket)
+    : null;
+  const selectedDayBuckets =
+    selectedTenDayBucket === null
+      ? []
+      : getDayBucketsInRange(buckets, selectedTenDayBucket);
+  const maxSelectedDayCount = Math.max(
+    0,
+    ...selectedDayBuckets.map((bucket) => bucket.photo_count),
+  );
+
+  return (
+    <div className="mobileTenDayTimeline">
+      {monthSegments.map((month) => {
+        const tenDayBuckets = buildTenDayBuckets(month);
+
+        return (
+          <section
+            key={month.key}
+            className={month.isYearStart ? "tenDayMonthRow yearStart" : "tenDayMonthRow"}
+            data-visible-start={month.start}
+            data-visible-end={month.end}
+          >
+            <div className="tenDayMonthLabel">
+              {month.isYearStart ? <strong>{month.labelYear}</strong> : null}
+              <span>{month.labelMonth}</span>
+            </div>
+            <div className="tenDayCells" aria-label={`${month.labelMonth} ${month.labelYear}`}>
+              {tenDayBuckets.map((bucket) => {
+                const selectedDate = selectedBucket
+                  ? parseDate(selectedBucket.bucket_start)
+                  : null;
+                const isSelected =
+                  isSameBucket(selectedBucket, bucket) ||
+                  (selectedDate !== null && isDateInBucket(selectedDate, bucket));
+                const level = getTenDayDensityLevel(bucket.photo_count, maxTenDayCount);
+
+                return (
+                  <button
+                    key={`${bucket.bucket_start}-${bucket.bucket_end}`}
+                    type="button"
+                    className={
+                      isSelected
+                        ? `tenDayCell tenDayLevel${level} selected`
+                        : `tenDayCell tenDayLevel${level}`
+                    }
+                    title={`${bucket.label}: ${formatPhotoCount(bucket.photo_count)}`}
+                    onClick={() => onSelectBucket(bucket)}
+                  >
+                    <span className="srOnly">
+                      Select {bucket.label}, {formatPhotoCount(bucket.photo_count)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+
+      {selectedTenDayBucket ? (
+        <section className="tenDayDetailPanel">
+          <div className="tenDayDetailHeader">
+            <div>
+              <p className="sectionLabel">Selected range</p>
+              <strong>{selectedTenDayBucket.label}</strong>
+              <span>{formatPhotoCount(selectedTenDayBucket.photo_count)}</span>
+            </div>
+          </div>
+          <div className="dayDrillGrid" aria-label="Daily counts in selected range">
+            {selectedDayBuckets.map((bucket) => {
+              const level = getTenDayDensityLevel(bucket.photo_count, maxSelectedDayCount);
+              const isSelected = isSameBucket(selectedBucket, bucket);
+
+              return (
+                <button
+                  key={`${bucket.bucket_start}-${bucket.bucket_end}`}
+                  type="button"
+                  className={
+                    isSelected
+                      ? `dayDrillCell tenDayLevel${level} selected`
+                      : `dayDrillCell tenDayLevel${level}`
+                  }
+                  title={`${formatBucketLabel(bucket.bucket_start, "overview")}: ${formatPhotoCount(bucket.photo_count)}`}
+                  onClick={() => onSelectBucket(bucket)}
+                >
+                  <span>{formatDayOfMonth(bucket.bucket_start)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
@@ -826,6 +951,113 @@ function buildDailyBuckets(buckets: TimelineBucket[]): TimelineBucket[] {
   return Array.from(bucketsByDay.values());
 }
 
+function buildTenDayBuckets(month: MonthSegment): TenDayBucket[] {
+  const monthStart = parseDate(month.start);
+  if (!monthStart) {
+    return [];
+  }
+
+  const year = monthStart.getFullYear();
+  const monthIndex = monthStart.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const bucketRanges = [
+    { bucketIndex: 1 as const, startDay: 1, endDay: 10 },
+    { bucketIndex: 2 as const, startDay: 11, endDay: 20 },
+    { bucketIndex: 3 as const, startDay: 21, endDay: daysInMonth },
+  ];
+
+  return bucketRanges.map(({ bucketIndex, startDay, endDay }) => {
+    const bucketStart = formatLocalIsoDate(year, monthIndex, startDay);
+    const bucketEnd = formatLocalIsoDate(year, monthIndex, endDay + 1);
+    const photoCount = month.buckets.reduce((total, bucket) => {
+      const date = parseDate(bucket.bucket_start);
+      if (!date) {
+        return total;
+      }
+
+      const day = date.getDate();
+      return day >= startDay && day <= endDay ? total + bucket.photo_count : total;
+    }, 0);
+
+    return {
+      bucketIndex,
+      bucket_start: bucketStart,
+      bucket_end: bucketEnd,
+      photo_count: photoCount,
+      color_level: quantizeTenDayColorLevel(photoCount),
+      has_gap_label: false,
+      gap_label: null,
+      label: formatTenDayRangeLabel(year, monthIndex, startDay, endDay),
+    };
+  });
+}
+
+function findTenDayBucket(
+  monthSegments: MonthSegment[],
+  selectedBucket: TimelineBucket,
+): TenDayBucket | null {
+  const selectedStart = parseDate(selectedBucket.bucket_start);
+  if (!selectedStart) {
+    return null;
+  }
+
+  const monthKey = getMonthKey(selectedStart);
+  const month = monthSegments.find((segment) => segment.key === monthKey);
+  if (!month) {
+    return null;
+  }
+
+  return (
+    buildTenDayBuckets(month).find((bucket) => isDateInBucket(selectedStart, bucket)) ??
+    null
+  );
+}
+
+function getDayBucketsInRange(
+  buckets: TimelineBucket[],
+  selectedBucket: TimelineBucket,
+): TimelineBucket[] {
+  const start = parseDate(selectedBucket.bucket_start);
+  const end = parseDate(selectedBucket.bucket_end);
+  if (!start || !end) {
+    return [];
+  }
+
+  const days: TimelineBucket[] = [];
+  const cursor = new Date(start);
+  const bucketsByDay = new Map(
+    buckets.map((bucket) => [bucket.bucket_start.slice(0, 10), bucket]),
+  );
+
+  while (cursor < end) {
+    const dayStart = formatLocalIsoDate(
+      cursor.getFullYear(),
+      cursor.getMonth(),
+      cursor.getDate(),
+    );
+    const dayEnd = formatLocalIsoDate(
+      cursor.getFullYear(),
+      cursor.getMonth(),
+      cursor.getDate() + 1,
+    );
+    const existingBucket = bucketsByDay.get(dayStart.slice(0, 10));
+
+    days.push(
+      existingBucket ?? {
+        bucket_start: dayStart,
+        bucket_end: dayEnd,
+        photo_count: 0,
+        color_level: 0,
+        has_gap_label: false,
+        gap_label: null,
+      },
+    );
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+}
+
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -936,6 +1168,39 @@ function getDisplayColorLevel(bucket: TimelineBucket, maxVisibleCount: number): 
   return Math.max(bucket.color_level, adaptiveLevel, 1);
 }
 
+function quantizeTenDayColorLevel(photoCount: number): number {
+  if (photoCount <= 0) {
+    return 0;
+  }
+  if (photoCount === 1) {
+    return 1;
+  }
+  if (photoCount <= 3) {
+    return 2;
+  }
+  if (photoCount <= 7) {
+    return 3;
+  }
+  if (photoCount <= 15) {
+    return 4;
+  }
+  return 5;
+}
+
+function getTenDayDensityLevel(photoCount: number, maxVisibleCount: number): number {
+  if (photoCount <= 0) {
+    return 0;
+  }
+
+  const fixedLevel = quantizeTenDayColorLevel(photoCount);
+  if (maxVisibleCount <= 1) {
+    return fixedLevel;
+  }
+
+  const adaptiveLevel = Math.ceil((photoCount / maxVisibleCount) * 5);
+  return Math.max(fixedLevel, adaptiveLevel, 1);
+}
+
 function getDotSize(level: number): number {
   return [0, 6, 8, 10, 12][level] ?? 8;
 }
@@ -953,6 +1218,12 @@ function isSameBucket(
 function parseDate(value: string): Date | null {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isDateInBucket(date: Date, bucket: TimelineBucket): boolean {
+  const start = parseDate(bucket.bucket_start);
+  const end = parseDate(bucket.bucket_end);
+  return start !== null && end !== null && date >= start && date < end;
 }
 
 function formatMonthStart(date: Date): string {
@@ -1028,6 +1299,24 @@ function formatBucketLabel(value: string, zoom: TimelineZoom): string {
 
 function formatPhotoCount(count: number): string {
   return count === 1 ? "1 photo" : `${count} photos`;
+}
+
+function formatDayOfMonth(value: string): string {
+  const date = parseDate(value);
+  return date ? String(date.getDate()) : value.slice(8, 10);
+}
+
+function formatTenDayRangeLabel(
+  year: number,
+  monthIndex: number,
+  startDay: number,
+  endDay: number,
+): string {
+  const start = new Date(year, monthIndex, startDay);
+  const monthLabel = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+  }).format(start);
+  return `${monthLabel} ${startDay}-${endDay}, ${year}`;
 }
 
 function clampScale(value: number): number {

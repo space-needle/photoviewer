@@ -16,12 +16,19 @@ type TimelinePhotoPanelProps = {
   activeVisit: Visit | null;
   onOpenPhoto: (photo: PhotoListItem) => void;
   onRenameVisit: (visit: Visit) => void;
+  onClearSelection?: () => void;
 };
 
 type SelectionKind = "visit" | "bucket";
 
 export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
-  const { selectedBucket, activeVisit, onOpenPhoto, onRenameVisit } = props;
+  const {
+    selectedBucket,
+    activeVisit,
+    onOpenPhoto,
+    onRenameVisit,
+    onClearSelection,
+  } = props;
   const [photos, setPhotos] = useState<PhotoListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,7 +127,14 @@ export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
               : `${selectedBucket?.bucket_start} to ${selectedBucket?.bucket_end}`}
           </p>
         </div>
-        <span className="statusPill">{total} photos</span>
+        <div className="selectionActions">
+          <span className="statusPill">{total} photos</span>
+          {onClearSelection ? (
+            <button type="button" className="clearSelectionButton" onClick={onClearSelection}>
+              Clear
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {isLoading ? (

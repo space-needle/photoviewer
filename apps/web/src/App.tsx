@@ -239,6 +239,11 @@ function TimelinePage(props: {
     onVisibleRangeChange(visitToTimeRange(visit));
   }
 
+  function handleClearSelection() {
+    onSelectedBucketChange(null);
+    onActiveVisitChange(null);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -378,6 +383,7 @@ function TimelinePage(props: {
             selectedBucket={selectedBucket}
             onOpenPhoto={handleOpenPhoto}
             onRenameVisit={onRenameVisit}
+            onClearSelection={handleClearSelection}
           />
         </>
       ) : null}
