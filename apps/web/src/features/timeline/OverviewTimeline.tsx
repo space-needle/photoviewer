@@ -4,6 +4,7 @@ import type { TimelineBucket } from "../../lib/api";
 
 type OverviewTimelineProps = {
   buckets: TimelineBucket[];
+  onYearSelect?: (year: number) => void;
 };
 
 type MonthDensity = {
@@ -15,6 +16,7 @@ type MonthDensity = {
 
 export function OverviewTimeline(props: OverviewTimelineProps) {
   const months = buildMonthDensities(props.buckets);
+  const years = Array.from(new Set(months.map((month) => month.year)));
 
   if (months.length === 0) {
     return null;
@@ -30,6 +32,23 @@ export function OverviewTimeline(props: OverviewTimelineProps) {
       </div>
       <div className="overviewTimelineScroller">
         <div className="overviewTimelineRows">
+          <div className="overviewYearHitLayer" aria-label="Select year">
+            {years.map((year) => (
+              <button
+                key={year}
+                type="button"
+                className="overviewYearButton"
+                style={
+                  {
+                    gridRow: `${getYearStartRow(months, year)} / span ${getYearMonthCount(months, year)}`,
+                  } as CSSProperties
+                }
+                onClick={() => props.onYearSelect?.(year)}
+              >
+                <span className="srOnly">Open {year} detail timeline</span>
+              </button>
+            ))}
+          </div>
           {months.map((month) => {
             const intensity = getDensityIntensity(month.photoCount, cap);
             const isYearStart = month.month === 1;
@@ -118,6 +137,15 @@ function getDensityIntensity(photoCount: number, cap: number): number {
   }
 
   return Math.min(1, Math.log1p(photoCount) / Math.log1p(cap));
+}
+
+function getYearStartRow(months: MonthDensity[], year: number): number {
+  const index = months.findIndex((month) => month.year === year);
+  return index < 0 ? 1 : index + 1;
+}
+
+function getYearMonthCount(months: MonthDensity[], year: number): number {
+  return Math.max(1, months.filter((month) => month.year === year).length);
 }
 
 function parseDate(value: string): Date | null {

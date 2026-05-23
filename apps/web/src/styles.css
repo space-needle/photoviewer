@@ -315,8 +315,29 @@ input {
 }
 
 .overviewTimelineRows {
+  position: relative;
   display: grid;
   gap: 0;
+}
+
+.overviewYearHitLayer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  display: grid;
+  width: 104px;
+  grid-auto-rows: 9px;
+}
+
+.overviewYearButton {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.overviewYearButton:hover {
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .overviewMonthRow {
@@ -342,6 +363,29 @@ input {
 
 .overviewYearLabel span {
   transform: translateY(-1px);
+}
+
+.yearDetailHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.yearDetailHeader h3 {
+  margin: 0;
+  color: #18304a;
+  font-size: 1.2rem;
+}
+
+.overviewBackButton {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  color: #496079;
+  background: rgba(255, 255, 255, 0.64);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .overviewDensitySegment {

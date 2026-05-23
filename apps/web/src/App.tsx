@@ -206,6 +206,7 @@ function TimelinePage(props: {
   const [timelineData, setTimelineData] = useState<TimelineBucketsResponse | null>(
     null,
   );
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [activePhoto, setActivePhoto] = useState<PhotoDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +239,13 @@ function TimelinePage(props: {
     onSelectedBucketChange(null);
     onActiveVisitChange(null);
   }
+
+  const yearBuckets = selectedYear
+    ? timelineData?.buckets.filter((bucket) => {
+        const bucketYear = new Date(bucket.bucket_start).getFullYear();
+        return bucketYear === selectedYear;
+      }) ?? []
+    : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -317,31 +325,55 @@ function TimelinePage(props: {
 
       {!error && timelineData ? (
         <>
-          <OverviewTimeline buckets={timelineData.buckets} />
+          {selectedYear === null ? (
+            <OverviewTimeline
+              buckets={timelineData.buckets}
+              onYearSelect={(year) => {
+                handleClearSelection();
+                setSelectedYear(year);
+              }}
+            />
+          ) : (
+            <>
+              <div className="yearDetailHeader">
+                <button
+                  type="button"
+                  className="overviewBackButton"
+                  onClick={() => {
+                    handleClearSelection();
+                    setSelectedYear(null);
+                  }}
+                >
+                  ← Overview
+                </button>
+                <h3>{selectedYear}</h3>
+              </div>
 
-          <HeatRibbonTimeline
-            buckets={timelineData.buckets}
-            zoom={zoom}
-            scale={scale}
-            activeVisit={activeVisit}
-            selectedBucket={selectedBucket}
-            visits={visits}
-            onSelectBucket={handleBucketSelect}
-            onSelectVisit={handleVisitSelect}
-            onRenameVisit={onRenameVisit}
-            onScaleChange={onScaleChange}
-            onVisibleRangeChange={onVisibleRangeChange}
-          />
+              <HeatRibbonTimeline
+                buckets={yearBuckets}
+                zoom={zoom}
+                scale={scale}
+                activeVisit={activeVisit}
+                selectedBucket={selectedBucket}
+                visits={visits}
+                onSelectBucket={handleBucketSelect}
+                onSelectVisit={handleVisitSelect}
+                onRenameVisit={onRenameVisit}
+                onScaleChange={onScaleChange}
+                onVisibleRangeChange={onVisibleRangeChange}
+              />
 
-          <TimelinePhotoPanel
-            activeVisit={activeVisit}
-            selectedBucket={selectedBucket}
-            timelineBuckets={timelineData.buckets}
-            onOpenPhoto={handleOpenPhoto}
-            onSelectBucket={handleBucketSelect}
-            onRenameVisit={onRenameVisit}
-            onClearSelection={handleClearSelection}
-          />
+              <TimelinePhotoPanel
+                activeVisit={activeVisit}
+                selectedBucket={selectedBucket}
+                timelineBuckets={yearBuckets}
+                onOpenPhoto={handleOpenPhoto}
+                onSelectBucket={handleBucketSelect}
+                onRenameVisit={onRenameVisit}
+                onClearSelection={handleClearSelection}
+              />
+            </>
+          )}
         </>
       ) : null}
 
