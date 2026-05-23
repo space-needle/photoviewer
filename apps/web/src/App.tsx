@@ -147,13 +147,8 @@ function TopBar() {
   return (
     <header className="topbar">
       <div>
-        <p className="eyebrow">Local-first photo timeline</p>
         <h1>Photoviewer</h1>
-        <p className="subtitle">Backend connected, timeline UI coming next.</p>
       </div>
-      <button type="button" className="importButton">
-        Import
-      </button>
     </header>
   );
 }
@@ -305,10 +300,6 @@ function TimelinePage(props: {
           {timelineData ? `${timelineData.buckets.length} buckets` : "Live"}
         </span>
       </div>
-
-      <p className="description">
-        Scroll the timeline to browse your library. The visible range filters the map.
-      </p>
 
       <div className="timelineToolbar">
         <div className="visibleRangeCard">
