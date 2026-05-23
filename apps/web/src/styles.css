@@ -810,10 +810,49 @@ input {
 }
 
 .selectedRangePanel {
+  display: grid;
+  gap: 12px;
+}
+
+.selectedRangeHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.dayDrillGrid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.dayDrillCell {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 2px;
+  color: #0f172a;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.dayDrillCell:hover {
+  transform: translateY(-1px);
+}
+
+.dayDrillCell.selected {
+  border-color: rgba(29, 78, 216, 0.96);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 0 5px rgba(37, 99, 235, 0.34);
 }
 
 .visitsPanel {

@@ -13,8 +13,10 @@ import { EditableVisitTitle } from "../visits/EditableVisitTitle";
 
 type TimelinePhotoPanelProps = {
   selectedBucket: TimelineBucket | null;
+  timelineBuckets: TimelineBucket[];
   activeVisit: Visit | null;
   onOpenPhoto: (photo: PhotoListItem) => void;
+  onSelectBucket: (bucket: TimelineBucket) => void;
   onRenameVisit: (visit: Visit) => void;
   onClearSelection?: () => void;
 };
@@ -24,8 +26,10 @@ type SelectionKind = "visit" | "bucket";
 export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
   const {
     selectedBucket,
+    timelineBuckets,
     activeVisit,
     onOpenPhoto,
+    onSelectBucket,
     onRenameVisit,
     onClearSelection,
   } = props;
@@ -38,6 +42,14 @@ export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
     : selectedBucket
       ? "bucket"
       : null;
+  const selectedDayBuckets =
+    selectionKind === "bucket" && selectedBucket
+      ? getDayBucketsInRange(timelineBuckets, selectedBucket)
+      : [];
+  const maxSelectedDayCount = Math.max(
+    0,
+    ...selectedDayBuckets.map((bucket) => bucket.photo_count),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -110,29 +122,59 @@ export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
   return (
     <>
       <section className="selectedRangePanel">
-        <div>
-          <p className="sectionLabel">Selected range</p>
-          {selectionKind === "visit" && activeVisit ? (
-            <h3 className="panelTitle">
-              <EditableVisitTitle visit={activeVisit} onRenamed={onRenameVisit} />
-            </h3>
-          ) : (
-            <h3 className="panelTitle">{formatSelectedBucketLabel(selectedBucket)}</h3>
-          )}
-          <p className="placeholderBody">
-            {selectionKind === "visit" && activeVisit
-              ? `${activeVisit.start_time} to ${activeVisit.end_time}`
-              : `${selectedBucket?.bucket_start} to ${selectedBucket?.bucket_end}`}
-          </p>
+        <div className="selectedRangeHeader">
+          <div>
+            <p className="sectionLabel">Selected range</p>
+            {selectionKind === "visit" && activeVisit ? (
+              <h3 className="panelTitle">
+                <EditableVisitTitle visit={activeVisit} onRenamed={onRenameVisit} />
+              </h3>
+            ) : (
+              <h3 className="panelTitle">{formatSelectedBucketLabel(selectedBucket)}</h3>
+            )}
+            <p className="placeholderBody">
+              {selectionKind === "visit" && activeVisit
+                ? `${activeVisit.start_time} to ${activeVisit.end_time}`
+                : `${selectedBucket?.bucket_start} to ${selectedBucket?.bucket_end}`}
+            </p>
+          </div>
+          <div className="selectionActions">
+            <span className="statusPill">{total} photos</span>
+            {onClearSelection ? (
+              <button type="button" className="clearSelectionButton" onClick={onClearSelection}>
+                Clear
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="selectionActions">
-          <span className="statusPill">{total} photos</span>
-          {onClearSelection ? (
-            <button type="button" className="clearSelectionButton" onClick={onClearSelection}>
-              Clear
-            </button>
-          ) : null}
-        </div>
+
+        {selectedDayBuckets.length > 1 ? (
+          <div className="dayDrillGrid" aria-label="Daily counts in selected range">
+            {selectedDayBuckets.map((bucket) => {
+              const level = getSelectedRangeDensityLevel(
+                bucket.photo_count,
+                maxSelectedDayCount,
+              );
+              const isSelected = isSameBucket(selectedBucket, bucket);
+
+              return (
+                <button
+                  key={`${bucket.bucket_start}-${bucket.bucket_end}`}
+                  type="button"
+                  className={
+                    isSelected
+                      ? `dayDrillCell tenDayLevel${level} selected`
+                      : `dayDrillCell tenDayLevel${level}`
+                  }
+                  title={`${formatSelectedBucketLabel(bucket)}: ${formatPhotoCount(bucket.photo_count)}`}
+                  onClick={() => onSelectBucket(bucket)}
+                >
+                  <span>{formatDayOfMonth(bucket.bucket_start)}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
 
       <section className="timelinePhotoPanel">
@@ -228,4 +270,112 @@ function formatSelectedBucketLabel(bucket: TimelineBucket | null): string {
 
   const month = new Intl.DateTimeFormat(undefined, { month: "short" }).format(start);
   return `${month} ${start.getDate()}-${displayEnd.getDate()}, ${start.getFullYear()}`;
+}
+
+function getDayBucketsInRange(
+  buckets: TimelineBucket[],
+  selectedBucket: TimelineBucket,
+): TimelineBucket[] {
+  const start = parseDate(selectedBucket.bucket_start);
+  const end = parseDate(selectedBucket.bucket_end);
+  if (!start || !end) {
+    return [];
+  }
+
+  const days: TimelineBucket[] = [];
+  const cursor = new Date(start);
+  const bucketsByDay = new Map(
+    buckets.map((bucket) => [bucket.bucket_start.slice(0, 10), bucket]),
+  );
+
+  while (cursor < end) {
+    const dayStart = formatLocalIsoDate(
+      cursor.getFullYear(),
+      cursor.getMonth(),
+      cursor.getDate(),
+    );
+    const dayEnd = formatLocalIsoDate(
+      cursor.getFullYear(),
+      cursor.getMonth(),
+      cursor.getDate() + 1,
+    );
+    const existingBucket = bucketsByDay.get(dayStart.slice(0, 10));
+
+    days.push(
+      existingBucket ?? {
+        bucket_start: dayStart,
+        bucket_end: dayEnd,
+        photo_count: 0,
+        color_level: 0,
+        has_gap_label: false,
+        gap_label: null,
+      },
+    );
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+}
+
+function getSelectedRangeDensityLevel(photoCount: number, maxVisibleCount: number): number {
+  if (photoCount <= 0) {
+    return 0;
+  }
+  if (maxVisibleCount <= 1) {
+    return quantizeSelectedRangeColorLevel(photoCount);
+  }
+
+  const adaptiveLevel = Math.ceil((photoCount / maxVisibleCount) * 5);
+  return Math.max(quantizeSelectedRangeColorLevel(photoCount), adaptiveLevel, 1);
+}
+
+function quantizeSelectedRangeColorLevel(photoCount: number): number {
+  if (photoCount <= 0) {
+    return 0;
+  }
+  if (photoCount === 1) {
+    return 1;
+  }
+  if (photoCount <= 3) {
+    return 2;
+  }
+  if (photoCount <= 7) {
+    return 3;
+  }
+  if (photoCount <= 15) {
+    return 4;
+  }
+  return 5;
+}
+
+function isSameBucket(
+  selectedBucket: TimelineBucket | null,
+  bucket: TimelineBucket,
+): boolean {
+  return (
+    selectedBucket?.bucket_start === bucket.bucket_start &&
+    selectedBucket?.bucket_end === bucket.bucket_end
+  );
+}
+
+function parseDate(value: string): Date | null {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatLocalIsoDate(year: number, monthIndex: number, day: number): string {
+  const date = new Date(year, monthIndex, day);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(date.getDate()).padStart(2, "0")}T00:00:00`;
+}
+
+function formatDayOfMonth(value: string): string {
+  const date = parseDate(value);
+  return date ? String(date.getDate()) : value.slice(8, 10);
+}
+
+function formatPhotoCount(count: number): string {
+  return count === 1 ? "1 photo" : `${count} photos`;
 }

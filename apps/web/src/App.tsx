@@ -333,7 +333,9 @@ function TimelinePage(props: {
           <TimelinePhotoPanel
             activeVisit={activeVisit}
             selectedBucket={selectedBucket}
+            timelineBuckets={timelineData.buckets}
             onOpenPhoto={handleOpenPhoto}
+            onSelectBucket={handleBucketSelect}
             onRenameVisit={onRenameVisit}
             onClearSelection={handleClearSelection}
           />

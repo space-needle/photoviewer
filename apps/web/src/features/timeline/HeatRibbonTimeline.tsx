@@ -947,27 +947,6 @@ function buildTenDayBuckets(month: MonthSegment): TenDayBucket[] {
   });
 }
 
-function findTenDayBucket(
-  monthSegments: MonthSegment[],
-  selectedBucket: TimelineBucket,
-): TenDayBucket | null {
-  const selectedStart = parseDate(selectedBucket.bucket_start);
-  if (!selectedStart) {
-    return null;
-  }
-
-  const monthKey = getMonthKey(selectedStart);
-  const month = monthSegments.find((segment) => segment.key === monthKey);
-  if (!month) {
-    return null;
-  }
-
-  return (
-    buildTenDayBuckets(month).find((bucket) => isDateInBucket(selectedStart, bucket)) ??
-    null
-  );
-}
-
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
