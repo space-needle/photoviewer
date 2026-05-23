@@ -290,6 +290,77 @@ input {
   font-weight: 800;
 }
 
+.overviewTimeline {
+  margin-top: 14px;
+}
+
+.overviewTimelineHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 8px;
+}
+
+.overviewTimelineHeader span {
+  color: #71839a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.overviewTimelineScroller {
+  max-height: min(52vh, 620px);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.overviewTimelineRows {
+  display: grid;
+  gap: 0;
+}
+
+.overviewMonthRow {
+  display: grid;
+  grid-template-columns: 58px 34px;
+  gap: 10px;
+  align-items: stretch;
+  min-height: 9px;
+}
+
+.overviewMonthRow.yearStart {
+  margin-top: 4px;
+}
+
+.overviewYearLabel {
+  display: flex;
+  justify-content: flex-end;
+  color: #284059;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.overviewYearLabel span {
+  transform: translateY(-1px);
+}
+
+.overviewDensitySegment {
+  width: 18px;
+  min-height: 9px;
+  border-radius: 999px;
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(37, 99, 235, calc(0.1 + var(--overview-intensity) * 0.56)),
+      rgba(96, 165, 250, calc(0.05 + var(--overview-intensity) * 0.22)) 42%,
+      rgba(96, 165, 250, 0) 72%
+    );
+  box-shadow:
+    0 0 calc(6px + var(--overview-intensity) * 15px)
+      rgba(37, 99, 235, calc(var(--overview-intensity) * 0.28));
+  opacity: calc(0.24 + var(--overview-intensity) * 0.76);
+}
+
 .mobileTenDayTimeline {
   display: none;
 }

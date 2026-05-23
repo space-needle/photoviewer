@@ -4,6 +4,7 @@ import { PhotoMap } from "./features/map/PhotoMap";
 import { PhotoViewerModal } from "./features/photos/PhotoViewerModal";
 import { TimelinePhotoPanel } from "./features/photos/TimelinePhotoPanel";
 import { HeatRibbonTimeline } from "./features/timeline/HeatRibbonTimeline";
+import { OverviewTimeline } from "./features/timeline/OverviewTimeline";
 import {
   ensureThumbnails,
   getPhoto,
@@ -316,6 +317,8 @@ function TimelinePage(props: {
 
       {!error && timelineData ? (
         <>
+          <OverviewTimeline buckets={timelineData.buckets} />
+
           <HeatRibbonTimeline
             buckets={timelineData.buckets}
             zoom={zoom}
