@@ -192,32 +192,6 @@ input {
   gap: 14px;
 }
 
-.timelineToolbar {
-  display: grid;
-  gap: 12px;
-  align-items: end;
-  margin-top: 14px;
-}
-
-.timelineToolbar .field {
-  margin-top: 0;
-}
-
-.visibleRangeCard {
-  display: grid;
-  gap: 4px;
-  min-height: 48px;
-  padding: 9px 11px;
-  border: 1px solid rgba(86, 106, 126, 0.07);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.visibleRangeCard strong {
-  color: #18304a;
-  font-size: 1rem;
-}
-
 .fieldLabel {
   display: block;
   margin-bottom: 8px;
@@ -231,19 +205,6 @@ input {
   color: #132032;
   background: #f7fbff;
   border: 1px solid rgba(45, 75, 107, 0.14);
-}
-
-.scaleSlider {
-  width: 100%;
-  accent-color: #2563eb;
-}
-
-.scaleReadout {
-  display: inline-block;
-  margin-top: 6px;
-  color: #607489;
-  font-size: 0.78rem;
-  font-weight: 800;
 }
 
 .placeholderCard {
@@ -374,8 +335,7 @@ input {
   gap: 8px;
 }
 
-.tenDayCell,
-.dayDrillCell {
+.tenDayCell {
   display: grid;
   place-items: center;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -392,13 +352,11 @@ input {
   height: 34px;
 }
 
-.tenDayCell:hover,
-.dayDrillCell:hover {
+.tenDayCell:hover {
   transform: translateY(-1px);
 }
 
-.tenDayCell.selected,
-.dayDrillCell.selected {
+.tenDayCell.selected {
   border-color: rgba(29, 78, 216, 0.96);
   box-shadow:
     0 0 0 2px rgba(255, 255, 255, 0.95),
@@ -427,51 +385,6 @@ input {
 
 .tenDayLevel5 {
   background: #2563eb;
-}
-
-.tenDayDetailPanel {
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px solid rgba(86, 106, 126, 0.07);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.56);
-}
-
-.tenDayDetailHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.tenDayDetailHeader strong,
-.tenDayDetailHeader span {
-  display: block;
-}
-
-.tenDayDetailHeader strong {
-  color: #18304a;
-}
-
-.tenDayDetailHeader span {
-  color: #607489;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.dayDrillGrid {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 5px;
-  margin-top: 12px;
-}
-
-.dayDrillCell {
-  min-width: 0;
-  aspect-ratio: 1 / 1;
-  color: #0f172a;
-  font-size: 0.68rem;
-  font-weight: 800;
 }
 
 .monthTimeline {
@@ -886,6 +799,7 @@ input {
   word-break: break-word;
 }
 
+.selectedRangePanel,
 .timelinePhotoPanel {
   margin-top: 14px;
   padding: 14px;
@@ -893,6 +807,13 @@ input {
   border-radius: 16px;
   background: rgba(246, 250, 253, 0.78);
   box-shadow: 0 10px 28px rgba(49, 76, 107, 0.06);
+}
+
+.selectedRangePanel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .visitsPanel {
@@ -1292,10 +1213,6 @@ input {
   .controlsGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: end;
-  }
-
-  .timelineToolbar {
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) minmax(150px, 200px);
   }
 
   .detailGrid {

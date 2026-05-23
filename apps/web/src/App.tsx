@@ -194,7 +194,6 @@ function TimelinePage(props: {
     scale,
     onScaleChange,
     timelineRange,
-    visibleRange,
     onVisibleRangeChange,
     selectedBucket,
     onSelectedBucketChange,
@@ -299,44 +298,6 @@ function TimelinePage(props: {
         <span className="statusPill">
           {timelineData ? `${timelineData.buckets.length} buckets` : "Live"}
         </span>
-      </div>
-
-      <div className="timelineToolbar">
-        <div className="visibleRangeCard">
-          <span className="fieldLabel">Visible range</span>
-          <strong>{formatVisibleRangeLabel(visibleRange)}</strong>
-        </div>
-
-        <label className="field">
-          <span className="fieldLabel">Timeline zoom</span>
-          <input
-            className="scaleSlider"
-            type="range"
-            min="0.4"
-            max="3"
-            step="0.01"
-            value={scale}
-            onChange={(event) => onScaleChange(Number(event.target.value))}
-          />
-          <span className="scaleReadout">{scale.toFixed(2)}x</span>
-        </label>
-
-        <label className="field">
-          <span className="fieldLabel">Mode fallback</span>
-          <select
-            className="select"
-            value={zoom}
-            onChange={(event) =>
-              onScaleChange(zoomScaleDefaults[event.target.value as TimelineZoom])
-            }
-          >
-            {zoomOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       {isLoading ? (

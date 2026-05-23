@@ -382,18 +382,6 @@ function MobileTimelineHeatmap(props: {
       buildTenDayBuckets(month).map((bucket) => bucket.photo_count),
     ),
   );
-  const selectedTenDayBucket = selectedBucket
-    ? findTenDayBucket(monthSegments, selectedBucket)
-    : null;
-  const selectedDayBuckets =
-    selectedTenDayBucket === null
-      ? []
-      : getDayBucketsInRange(buckets, selectedTenDayBucket);
-  const maxSelectedDayCount = Math.max(
-    0,
-    ...selectedDayBuckets.map((bucket) => bucket.photo_count),
-  );
-
   return (
     <div className="mobileTenDayTimeline">
       {monthSegments.map((month) => {
@@ -443,39 +431,6 @@ function MobileTimelineHeatmap(props: {
         );
       })}
 
-      {selectedTenDayBucket ? (
-        <section className="tenDayDetailPanel">
-          <div className="tenDayDetailHeader">
-            <div>
-              <p className="sectionLabel">Selected range</p>
-              <strong>{selectedTenDayBucket.label}</strong>
-              <span>{formatPhotoCount(selectedTenDayBucket.photo_count)}</span>
-            </div>
-          </div>
-          <div className="dayDrillGrid" aria-label="Daily counts in selected range">
-            {selectedDayBuckets.map((bucket) => {
-              const level = getTenDayDensityLevel(bucket.photo_count, maxSelectedDayCount);
-              const isSelected = isSameBucket(selectedBucket, bucket);
-
-              return (
-                <button
-                  key={`${bucket.bucket_start}-${bucket.bucket_end}`}
-                  type="button"
-                  className={
-                    isSelected
-                      ? `dayDrillCell tenDayLevel${level} selected`
-                      : `dayDrillCell tenDayLevel${level}`
-                  }
-                  title={`${formatBucketLabel(bucket.bucket_start, "overview")}: ${formatPhotoCount(bucket.photo_count)}`}
-                  onClick={() => onSelectBucket(bucket)}
-                >
-                  <span>{formatDayOfMonth(bucket.bucket_start)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
@@ -1013,51 +968,6 @@ function findTenDayBucket(
   );
 }
 
-function getDayBucketsInRange(
-  buckets: TimelineBucket[],
-  selectedBucket: TimelineBucket,
-): TimelineBucket[] {
-  const start = parseDate(selectedBucket.bucket_start);
-  const end = parseDate(selectedBucket.bucket_end);
-  if (!start || !end) {
-    return [];
-  }
-
-  const days: TimelineBucket[] = [];
-  const cursor = new Date(start);
-  const bucketsByDay = new Map(
-    buckets.map((bucket) => [bucket.bucket_start.slice(0, 10), bucket]),
-  );
-
-  while (cursor < end) {
-    const dayStart = formatLocalIsoDate(
-      cursor.getFullYear(),
-      cursor.getMonth(),
-      cursor.getDate(),
-    );
-    const dayEnd = formatLocalIsoDate(
-      cursor.getFullYear(),
-      cursor.getMonth(),
-      cursor.getDate() + 1,
-    );
-    const existingBucket = bucketsByDay.get(dayStart.slice(0, 10));
-
-    days.push(
-      existingBucket ?? {
-        bucket_start: dayStart,
-        bucket_end: dayEnd,
-        photo_count: 0,
-        color_level: 0,
-        has_gap_label: false,
-        gap_label: null,
-      },
-    );
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return days;
-}
-
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -1299,11 +1209,6 @@ function formatBucketLabel(value: string, zoom: TimelineZoom): string {
 
 function formatPhotoCount(count: number): string {
   return count === 1 ? "1 photo" : `${count} photos`;
-}
-
-function formatDayOfMonth(value: string): string {
-  const date = parseDate(value);
-  return date ? String(date.getDate()) : value.slice(8, 10);
 }
 
 function formatTenDayRangeLabel(

@@ -108,18 +108,16 @@ export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
   }
 
   return (
-    <section className="timelinePhotoPanel">
-      <div className="detailPanelHeader">
+    <>
+      <section className="selectedRangePanel">
         <div>
-          <p className="sectionLabel">
-            {selectionKind === "visit" ? "Visit photos" : "Bucket photos"}
-          </p>
+          <p className="sectionLabel">Selected range</p>
           {selectionKind === "visit" && activeVisit ? (
             <h3 className="panelTitle">
               <EditableVisitTitle visit={activeVisit} onRenamed={onRenameVisit} />
             </h3>
           ) : (
-            <h3 className="panelTitle">Selected day</h3>
+            <h3 className="panelTitle">{formatSelectedBucketLabel(selectedBucket)}</h3>
           )}
           <p className="placeholderBody">
             {selectionKind === "visit" && activeVisit
@@ -135,56 +133,99 @@ export function TimelinePhotoPanel(props: TimelinePhotoPanelProps) {
             </button>
           ) : null}
         </div>
-      </div>
+      </section>
 
-      {isLoading ? (
-        <div className="messageCard">
-          <p className="placeholderTitle">Loading photos...</p>
-          <p className="placeholderBody">Preparing thumbnails for this selection.</p>
+      <section className="timelinePhotoPanel">
+        <div className="detailPanelHeader">
+          <div>
+            <p className="sectionLabel">
+              {selectionKind === "visit" ? "Visit photos" : "Bucket photos"}
+            </p>
+            <h3 className="panelTitle">
+              {selectionKind === "visit" ? "Photos in visit" : "Photos in range"}
+            </h3>
+          </div>
         </div>
-      ) : null}
 
-      {error ? (
-        <div className="messageCard errorCard">
-          <p className="placeholderTitle">Could not load photos</p>
-          <p className="placeholderBody">{error}</p>
-        </div>
-      ) : null}
+        {isLoading ? (
+          <div className="messageCard">
+            <p className="placeholderTitle">Loading photos...</p>
+            <p className="placeholderBody">Preparing thumbnails for this selection.</p>
+          </div>
+        ) : null}
 
-      {!isLoading && !error && photos.length === 0 ? (
-        <div className="emptyStateCard">
-          <p className="placeholderTitle">
-            {selectionKind === "visit"
-              ? "No photos found for this visit."
-              : "No photos found for this bucket."}
-          </p>
-          <p className="placeholderBody">Try another dot or visit card.</p>
-        </div>
-      ) : null}
+        {error ? (
+          <div className="messageCard errorCard">
+            <p className="placeholderTitle">Could not load photos</p>
+            <p className="placeholderBody">{error}</p>
+          </div>
+        ) : null}
 
-      {!isLoading && !error && photos.length > 0 ? (
-        <div className="thumbnailGrid">
-          {photos.map((photo) => (
-            <button
-              key={photo.id}
-              type="button"
-              className="thumbnailButton"
-              onClick={() => onOpenPhoto(photo)}
-            >
-              <img
-                className="thumbnailImage"
-                src={
-                  toApiAssetUrl(photo.thumbnail_url) ??
-                  toApiAssetUrl(photo.thumbnail_path) ??
-                  ""
-                }
-                alt={photo.file_name}
-                loading="lazy"
-              />
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </section>
+        {!isLoading && !error && photos.length === 0 ? (
+          <div className="emptyStateCard">
+            <p className="placeholderTitle">
+              {selectionKind === "visit"
+                ? "No photos found for this visit."
+                : "No photos found for this bucket."}
+            </p>
+            <p className="placeholderBody">Try another dot or visit card.</p>
+          </div>
+        ) : null}
+
+        {!isLoading && !error && photos.length > 0 ? (
+          <div className="thumbnailGrid">
+            {photos.map((photo) => (
+              <button
+                key={photo.id}
+                type="button"
+                className="thumbnailButton"
+                onClick={() => onOpenPhoto(photo)}
+              >
+                <img
+                  className="thumbnailImage"
+                  src={
+                    toApiAssetUrl(photo.thumbnail_url) ??
+                    toApiAssetUrl(photo.thumbnail_path) ??
+                    ""
+                  }
+                  alt={photo.file_name}
+                  loading="lazy"
+                />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </>
   );
+}
+
+function formatSelectedBucketLabel(bucket: TimelineBucket | null): string {
+  if (!bucket) {
+    return "Selected range";
+  }
+
+  const start = new Date(bucket.bucket_start);
+  const end = new Date(bucket.bucket_end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "Selected range";
+  }
+
+  const displayEnd = new Date(end);
+  displayEnd.setDate(displayEnd.getDate() - 1);
+
+  if (
+    start.getFullYear() === displayEnd.getFullYear() &&
+    start.getMonth() === displayEnd.getMonth() &&
+    start.getDate() === displayEnd.getDate()
+  ) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(start);
+  }
+
+  const month = new Intl.DateTimeFormat(undefined, { month: "short" }).format(start);
+  return `${month} ${start.getDate()}-${displayEnd.getDate()}, ${start.getFullYear()}`;
 }
