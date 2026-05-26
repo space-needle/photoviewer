@@ -144,6 +144,16 @@ function visitToTimeRange(visit: Visit): TimeRange {
   };
 }
 
+function getAvailableYears(buckets: TimelineBucket[]): number[] {
+  return Array.from(
+    new Set(
+      buckets
+        .map((bucket) => new Date(bucket.bucket_start).getFullYear())
+        .filter((year) => !Number.isNaN(year)),
+    ),
+  ).sort((left, right) => left - right);
+}
+
 function TopBar() {
   return (
     <header className="topbar">
@@ -210,6 +220,15 @@ function TimelinePage(props: {
   const [activePhoto, setActivePhoto] = useState<PhotoDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const availableYears = getAvailableYears(timelineData?.buckets ?? []);
+  const selectedYearIndex =
+    selectedYear === null ? -1 : availableYears.indexOf(selectedYear);
+  const previousYear =
+    selectedYearIndex > 0 ? availableYears[selectedYearIndex - 1] : null;
+  const nextYear =
+    selectedYearIndex >= 0 && selectedYearIndex < availableYears.length - 1
+      ? availableYears[selectedYearIndex + 1]
+      : null;
 
   async function handleOpenPhoto(photo: PhotoListItem) {
     try {
@@ -238,6 +257,15 @@ function TimelinePage(props: {
   function handleClearSelection() {
     onSelectedBucketChange(null);
     onActiveVisitChange(null);
+  }
+
+  function handleYearChange(year: number) {
+    handleClearSelection();
+    setSelectedYear(year);
+    onVisibleRangeChange({
+      start: `${year}-01-01T00:00:00`,
+      end: `${year + 1}-01-01T00:00:00`,
+    });
   }
 
   const yearBuckets = selectedYear
@@ -328,10 +356,7 @@ function TimelinePage(props: {
           {selectedYear === null ? (
             <OverviewTimeline
               buckets={timelineData.buckets}
-              onYearSelect={(year) => {
-                handleClearSelection();
-                setSelectedYear(year);
-              }}
+              onYearSelect={handleYearChange}
             />
           ) : (
             <>
@@ -346,12 +371,36 @@ function TimelinePage(props: {
                 >
                   ← Overview
                 </button>
+                <button
+                  type="button"
+                  className="yearStepButton"
+                  disabled={previousYear === null}
+                  onClick={() => {
+                    if (previousYear !== null) {
+                      handleYearChange(previousYear);
+                    }
+                  }}
+                >
+                  {previousYear ? `‹ ${previousYear}` : "‹"}
+                </button>
                 <h3>{selectedYear}</h3>
+                <button
+                  type="button"
+                  className="yearStepButton"
+                  disabled={nextYear === null}
+                  onClick={() => {
+                    if (nextYear !== null) {
+                      handleYearChange(nextYear);
+                    }
+                  }}
+                >
+                  {nextYear ? `${nextYear} ›` : "›"}
+                </button>
               </div>
 
               <HeatRibbonTimeline
                 buckets={yearBuckets}
-                zoom={zoom}
+                zoom="overview"
                 scale={scale}
                 activeVisit={activeVisit}
                 selectedBucket={selectedBucket}

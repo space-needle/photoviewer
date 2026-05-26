@@ -320,26 +320,6 @@ input {
   gap: 0;
 }
 
-.overviewYearHitLayer {
-  position: absolute;
-  inset: 0 auto 0 0;
-  z-index: 1;
-  display: grid;
-  width: 104px;
-  grid-auto-rows: 9px;
-}
-
-.overviewYearButton {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.overviewYearButton:hover {
-  background: rgba(37, 99, 235, 0.06);
-}
-
 .overviewMonthRow {
   display: grid;
   grid-template-columns: 58px 34px;
@@ -361,8 +341,20 @@ input {
   line-height: 1;
 }
 
-.overviewYearLabel span {
+.overviewYearButton {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 999px;
+  color: inherit;
+  background: transparent;
+  font-weight: inherit;
+  line-height: 1;
   transform: translateY(-1px);
+  cursor: pointer;
+}
+
+.overviewYearButton:hover {
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .yearDetailHeader {
@@ -388,6 +380,21 @@ input {
   font-weight: 800;
 }
 
+.yearStepButton {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 999px;
+  color: #496079;
+  background: rgba(255, 255, 255, 0.44);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.yearStepButton:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
 .overviewDensitySegment {
   width: 18px;
   min-height: 9px;
@@ -406,11 +413,11 @@ input {
 }
 
 .mobileTenDayTimeline {
-  display: none;
+  display: block;
 }
 
 .desktopTimelineContent {
-  display: block;
+  display: none;
 }
 
 .tenDayMonthRow {
@@ -1387,11 +1394,4 @@ input {
     display: none;
   }
 
-  .mobileTenDayTimeline {
-    display: block;
-  }
-
-  .desktopTimelineContent {
-    display: none;
-  }
 }
