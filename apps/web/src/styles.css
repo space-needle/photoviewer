@@ -317,19 +317,21 @@ input {
 .overviewTimelineRows {
   position: relative;
   display: grid;
-  gap: 0;
+  gap: 6px;
 }
 
-.overviewMonthRow {
+.overviewYearRow {
   display: grid;
   grid-template-columns: 58px 34px;
   gap: 10px;
-  align-items: stretch;
-  min-height: 9px;
-}
-
-.overviewMonthRow.yearStart {
-  margin-top: 4px;
+  align-items: start;
+  min-height: 112px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: inherit;
+  cursor: pointer;
 }
 
 .overviewYearLabel {
@@ -342,19 +344,21 @@ input {
 }
 
 .overviewYearButton {
+  display: inline-flex;
   padding: 1px 6px;
-  border: 0;
   border-radius: 999px;
   color: inherit;
-  background: transparent;
   font-weight: inherit;
   line-height: 1;
-  transform: translateY(-1px);
-  cursor: pointer;
 }
 
-.overviewYearButton:hover {
+.overviewYearRow:hover .overviewYearButton {
   background: rgba(37, 99, 235, 0.08);
+}
+
+.overviewYearDensity {
+  display: grid;
+  gap: 0;
 }
 
 .yearDetailHeader {

@@ -14,6 +14,13 @@ type MonthDensity = {
   photoCount: number;
 };
 
+type YearDensity = {
+  year: number;
+  key: string;
+  photoCount: number;
+  months: MonthDensity[];
+};
+
 export function OverviewTimeline(props: OverviewTimelineProps) {
   const months = buildMonthDensities(props.buckets);
 
@@ -21,6 +28,7 @@ export function OverviewTimeline(props: OverviewTimelineProps) {
     return null;
   }
 
+  const years = buildYearDensities(months);
   const cap = getDensityCap(months.map((month) => month.photoCount));
 
   return (
@@ -31,36 +39,41 @@ export function OverviewTimeline(props: OverviewTimelineProps) {
       </div>
       <div className="overviewTimelineScroller">
         <div className="overviewTimelineRows">
-          {months.map((month) => {
-            const intensity = getDensityIntensity(month.photoCount, cap);
-            const isYearStart = month.month === 1;
-
+          {years.map((yearData) => {
             return (
-              <div
-                key={month.key}
-                className={isYearStart ? "overviewMonthRow yearStart" : "overviewMonthRow"}
+              <button
+                key={yearData.key}
+                type="button"
+                className="overviewYearRow"
+                data-year={yearData.year}
+                onClick={() => props.onYearSelect?.(yearData.year)}
+                title={`Open ${yearData.year} timeline: ${formatPhotoCount(yearData.photoCount)}`}
               >
-                <div className="overviewYearLabel">
-                  {isYearStart ? (
-                    <button
-                      type="button"
-                      className="overviewYearButton"
-                      onClick={() => props.onYearSelect?.(month.year)}
-                    >
-                      {month.year}
-                    </button>
-                  ) : null}
-                </div>
-                <div
-                  className="overviewDensitySegment"
-                  style={
-                    {
-                      "--overview-intensity": intensity.toFixed(3),
-                    } as CSSProperties
-                  }
-                  title={`${formatMonthLabel(month)}: ${formatPhotoCount(month.photoCount)}`}
-                />
-              </div>
+                <span className="overviewYearLabel">
+                  <span className="overviewYearButton">{yearData.year}</span>
+                </span>
+                <span className="overviewYearDensity" aria-hidden="true">
+                  {yearData.months.map((month) => {
+                    const intensity = getDensityIntensity(month.photoCount, cap);
+
+                    return (
+                      <span
+                        key={month.key}
+                        className="overviewDensitySegment"
+                        style={
+                          {
+                            "--overview-intensity": intensity.toFixed(3),
+                          } as CSSProperties
+                        }
+                        title={`${formatMonthLabel(month)}: ${formatPhotoCount(month.photoCount)}`}
+                      />
+                    );
+                  })}
+                </span>
+                <span className="srOnly">
+                  Open {yearData.year} timeline, {formatPhotoCount(yearData.photoCount)}
+                </span>
+              </button>
             );
           })}
         </div>
@@ -106,6 +119,27 @@ function buildMonthDensities(buckets: TimelineBucket[]): MonthDensity[] {
   }
 
   return months;
+}
+
+function buildYearDensities(months: MonthDensity[]): YearDensity[] {
+  const yearsByKey = new Map<number, YearDensity>();
+
+  months.forEach((month) => {
+    const yearData =
+      yearsByKey.get(month.year) ??
+      ({
+        year: month.year,
+        key: String(month.year),
+        photoCount: 0,
+        months: [],
+      } satisfies YearDensity);
+
+    yearData.photoCount += month.photoCount;
+    yearData.months.push(month);
+    yearsByKey.set(month.year, yearData);
+  });
+
+  return Array.from(yearsByKey.values());
 }
 
 function getDensityCap(counts: number[]): number {
